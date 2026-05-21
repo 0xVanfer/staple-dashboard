@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calculator</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <script>var toHome = "../../../";</script>
+  
+  <!-- Third-party dependencies -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.0/dist/ethers.umd.min.js"></script>
+  
+  <!-- ABI dependencies -->
+  <script src="../../../abigen/stapleController/stapleController.js"></script>
+  <script src="../../../abigen/stapleUIPoolDataProvider/stapleUIPoolDataProvider.js"></script>
+  
+  <!-- Common libraries -->
+  <script src="../../lib/common.js?v=20260521r"></script>
+  <script src="../../lib/rpcManager.js"></script>
+  <script src="../../lib/contractCalls.js"></script>
+  <script src="../environment/environment.js?v=20260521r" defer></script>
+  
+  <link rel="stylesheet" href="../../components/navbar/navbar.css" />
+  <link rel="stylesheet" href="./calculator.css" />
+</head>
+<body>
+  <div class="calc-page">
+    <div class="calc-header">
+      <h1>Calculator</h1>
+      <p class="header-desc">Tools for analyzing and optimizing protocol parameters</p>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="apr">APR Calculator</button>
+      <button class="tab-btn" data-tab="swap">Fee Calculator</button>
+    </div>
+
+    <!-- APR Calculator Tab -->
+    <div id="tab-apr" class="tab-content active">
+      <div class="calc-container">
+        <!-- Left: Configuration -->
+        <div class="config-card">
+          <h3>Parameters</h3>
+          
+          <div class="config-row">
+            <label>Decimals</label>
+            <input id="decimals" type="number" value="4" min="0" max="18">
+          </div>
+
+          <div class="config-row">
+            <label>Total Credits</label>
+            <input id="totalcredits" type="number" value="100" min="0">
+          </div>
+
+          <div class="vtp-section">
+            <div class="vtp-header">
+              <h4>VTP Entries</h4>
+              <button id="btn-add-vtp" class="btn-secondary">+ Add</button>
+            </div>
+            <div id="vtp-list" class="vtp-list">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <button id="btn-calc-apr" class="btn-primary">Calculate</button>
+        </div>
+
+        <!-- Right: Results -->
+        <div class="results-card">
+          <h3>Results</h3>
+          
+          <div class="best-apr-display">
+            <div class="label">Best APR</div>
+            <div class="value" id="bestapr">-</div>
+          </div>
+
+          <div class="results-table-container">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Max Allocate (%)</th>
+                  <th>Credit</th>
+                  <th>APR Max (%)</th>
+                  <th>Allocation</th>
+                  <th>Contribution</th>
+                </tr>
+              </thead>
+              <tbody id="vtp-dynamic-rows">
+                <!-- Populated by JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <div id="apr-status" class="status-text">Configure VTPs and click Calculate</div>
+        </div>
+      </div>
+
+      <!-- Algorithm Explanation -->
+      <details class="algorithm-section">
+        <summary>
+          <span>📖 Algorithm Explanation</span>
+          <span class="expand-icon">▼</span>
+        </summary>
+        <div class="algorithm-content">
+          <h4>Overview</h4>
+          <p>This calculator finds the optimal combination of VTPs that maximizes the total APR while staying within the credit limit.</p>
+          
+          <h4>Step-by-Step Process</h4>
+          <ol>
+            <li><strong>Input Collection:</strong> Gather all VTP entries with their Max Allocate Rate (%), Credit requirement, and APR Max (%).</li>
+            <li><strong>Subset Generation:</strong> Generate all possible non-empty combinations of VTPs using bit masking (2<sup>N</sup> - 1 subsets).</li>
+            <li><strong>Feasibility Check:</strong> For each subset:
+              <ul>
+                <li>Calculate total credits needed (sum of all VTP credits in subset)</li>
+                <li>If total credits > available credits, skip this subset</li>
+              </ul>
+            </li>
+            <li><strong>APR Calculation:</strong> For each valid subset:
+              <ul>
+                <li>If subset has only 1 VTP: Combined APR = that VTP's APR Max</li>
+                <li>If subset has multiple VTPs: Combined APR = Σ(APR<sub>i</sub> × MaxAllocateRate<sub>i</sub>)</li>
+              </ul>
+            </li>
+            <li><strong>Optimization:</strong> Track the subset with the highest combined APR.</li>
+            <li><strong>Result Display:</strong> Show the optimal subset with:
+              <ul>
+                <li>Each VTP's allocation rate</li>
+                <li>Each VTP's APR contribution</li>
+                <li>Total combined APR</li>
+              </ul>
+            </li>
+          </ol>
+
+          <h4>Key Formulas</h4>
+          <p><strong>Single VTP:</strong> APR = APR Max</p>
+          <p><strong>Multiple VTPs:</strong> Combined APR = Σ(APR<sub>i</sub> × MAR<sub>i</sub>)</p>
+          <p style="margin-left:20px;font-size:13px;color:#666;">where MAR<sub>i</sub> = Max Allocate Rate (decimal form)</p>
+          
+          <h4>Example</h4>
+          <p>With 100 credits available and 3 VTPs:</p>
+          <ul>
+            <li>VTP 1: 30 credits, 50% max allocate, 10% APR → contribution: 5%</li>
+            <li>VTP 2: 40 credits, 40% max allocate, 8% APR → contribution: 3.2%</li>
+            <li>VTP 3: 50 credits, 60% max allocate, 12% APR → (skipped, exceeds credits when combined)</li>
+          </ul>
+          <p>Best combination: VTP 1 + VTP 2 = 8.2% total APR using 70 credits</p>
+        </div>
+      </details>
+    </div>
+
+    <!-- Coming Soon Tab -->
+    <div id="tab-coming-soon" class="tab-content">
+      <div style="text-align:center;padding:60px 20px;color:#666;">
+        <h3 style="margin:0 0 8px;color:#999;">More Calculation Tools Coming Soon</h3>
+        <p>Future tools: Swap Impact Calculator, Liquidity Analysis, Risk Assessment, etc.</p>
+      </div>
+    </div>
+
+    <!-- Swap Calculator Tab -->
+    <div id="tab-swap" class="tab-content">
+      <div class="swap-calc-container">
+        <!-- Left: Selection & Parameters -->
+        <div class="swap-calc-left">
+          <div class="swap-calc-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+              <h3 style="margin: 0;">Fee Configuration</h3>
+              <button id="btn-reload-vtps" class="btn-secondary" style="padding: 4px 8px; font-size: 12px; height: auto;">↻ Reload</button>
+            </div>
+            
+            <!-- Operation Type -->
+            <div class="config-row">
+              <label>Operation Type</label>
+              <select id="calc-operation-type" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                <option value="swap">Swap</option>
+                <option value="allocate">Allocate</option>
+                <option value="deallocate">Deallocate</option>
+              </select>
+            </div>
+
+            <!-- VTP Selection -->
+            <div class="config-row">
+              <label>Select VTP</label>
+              <select id="swap-vtp-select" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                <option value="">Loading VTPs...</option>
+              </select>
+            </div>
+
+            <!-- Swap Direction -->
+            <div class="config-row">
+              <label id="direction-label">Swap Direction</label>
+              <select id="swap-direction" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                <option value="">Select VTP first...</option>
+              </select>
+            </div>
+
+            <!-- Calculation Actions -->
+            <div id="calc-actions" style="display: none; margin-top: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 20px;">
+              <div class="config-row">
+                <label id="amount-label">Swap Amount (From Token)</label>
+                <input type="number" id="swap-amount-input" placeholder="Enter amount" 
+                       style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;" 
+                       step="0.000001" min="0" />
+              </div>
+              <button id="btn-calculate-swap" class="btn-primary" style="margin-top: 12px; width: 100%;">Calculate</button>
+            </div>
+
+            <!-- Deallocate Parameters -->
+            <details id="deallocate-params" style="display: none; margin-top: 20px;">
+              <summary style="margin: 0 0 10px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; cursor: pointer; font-weight: 600;">Deallocate Params</summary>
+              <div class="param-grid">
+                <div class="param-item">
+                  <span class="param-label">User Allocation:</span>
+                  <input type="text" id="param-user-alloc" class="param-input" value="0" />
+                </div>
+                <div class="param-item">
+                  <span class="param-label">User Shares:</span>
+                  <input type="text" id="param-user-shares" class="param-input" value="0" />
+                </div>
+                <div class="param-item">
+                  <span class="param-label">Total Shares:</span>
+                  <input type="text" id="param-total-shares" class="param-input" value="0" />
+                </div>
+              </div>
+            </details>
+
+            <!-- VTP Parameters Display -->
+            <div id="vtp-params-display" style="display: none; margin-top: 20px;">
+              <details>
+                <summary style="margin: 0 0 10px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; cursor: pointer; font-weight: 600;">VTP Parameters</summary>
+                <div class="param-grid">
+                  <div class="param-item">
+                    <span class="param-label">n:</span>
+                    <input type="text" id="param-n" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">p:</span>
+                    <input type="text" id="param-p" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">Po (Oracle Price):</span>
+                    <input type="text" id="param-po" class="param-input" value="0" disabled style="background-color: #f3f4f6; color: #6b7280;" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">Pa (Adjusted Price):</span>
+                    <input type="text" id="param-pa" class="param-input" value="0" disabled style="background-color: #f3f4f6; color: #6b7280;" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">New Po:</span>
+                    <input type="text" id="param-new-po" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">New Pa (Calculated):</span>
+                    <input type="text" id="param-new-pa" class="param-input" value="0" disabled style="background-color: #f3f4f6; color: #6b7280;" />
+                  </div>
+                </div>
+              </details>
+
+              <details style="margin-top: 20px;">
+                <summary id="summary-from-token" style="margin: 0 0 10px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; cursor: pointer; font-weight: 600;">From Token (Sell)</summary>
+                <div class="param-grid">
+                  <div class="param-item">
+                    <span class="param-label">Assets:</span>
+                    <input type="text" id="param-from-assets" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">Liability:</span>
+                    <input type="text" id="param-from-liability" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">Swap Fee In:</span>
+                    <input type="text" id="param-from-fee-in" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">Swap Fee Out:</span>
+                    <input type="text" id="param-from-fee-out" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">Protocol Fee Rate:</span>
+                    <input type="text" id="param-from-protocol-fee" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">ALR Lower Bound:</span>
+                    <input type="text" id="param-from-alr-bound" class="param-input" value="0" />
+                  </div>
+                </div>
+              </details>
+
+              <details style="margin-top: 20px;">
+                <summary id="summary-to-token" style="margin: 0 0 10px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; cursor: pointer; font-weight: 600;">To Token (Buy)</summary>
+                <div class="param-grid">
+                  <div class="param-item">
+                    <span class="param-label">Assets:</span>
+                    <input type="text" id="param-to-assets" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">Liability:</span>
+                    <input type="text" id="param-to-liability" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">Swap Fee In:</span>
+                    <input type="text" id="param-to-fee-in" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">Swap Fee Out:</span>
+                    <input type="text" id="param-to-fee-out" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">Protocol Fee Rate:</span>
+                    <input type="text" id="param-to-protocol-fee" class="param-input" value="0" />
+                  </div>
+                  <div class="param-item">
+                    <span class="param-label">ALR Lower Bound:</span>
+                    <input type="text" id="param-to-alr-bound" class="param-input" value="0" />
+                  </div>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Results Display -->
+        <div class="swap-calc-right">
+          <div class="swap-calc-card">
+            <h3>Calculation Results</h3>
+            <div id="swap-results-container" class="swap-results-empty">
+              <p style="color: #9ca3af; text-align: center; padding: 40px 20px;">
+                Configure swap parameters and click Calculate to see detailed step-by-step results
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../components/navbar/navbar.js" defer></script>
+  <script src="./calcAprs.js" defer></script>
+  <script src="./swapCalculator.js" defer></script>
+  <script src="./swapCalculatorUI.js" defer></script>
+  <script>
+    // Load pool credits and update credit dropdowns in VTP rows
+    async function loadPoolCredits() {
+      try {
+        if (!window.contracts || !window.contracts.getController) {
+          console.warn('[calculator] Contracts not ready yet');
+          return;
+        }
+        
+        const controller = await window.contracts.getController();
+        if (!controller) {
+          console.warn('[calculator] Controller not found');
+          return;
+        }
+        
+        const res = await controller.getCreditsInfo();
+        const creditList = Array.from(res?.creditList ?? res?.[1] ?? []).map(v => Number(v));
+        
+        if (creditList.length > 0) {
+          
+          // Store credits globally for use in addVtpRow
+          window.poolCreditList = creditList;
+          
+          // Update existing credit dropdowns
+          updateCreditDropdowns(creditList);
+          
+          // Override addVtpRow to use dynamic credits
+          if (window.addVtpRowOriginal) {
+            // Already overridden
+            return;
+          }
+          
+          // Find and override the addVtpRow in calcAprs.js
+          const script = document.createElement('script');
+          script.textContent = `
+            (function() {
+              // Save original if exists
+              const origAddVtp = window.addVtpRow;
+              
+              window.addVtpRowOriginal = origAddVtp;
+              window.addVtpRow = function(idx) {
+                const tbody = document.getElementById('vtp-dynamic-rows');
+                if (!tbody) return;
+                const tr = document.createElement('tr');
+                
+                // Build credit options dynamically
+                const credits = window.poolCreditList || [26, 31, 37];
+                const creditOptions = credits.map(c => 
+                  '<option value="' + c + '">' + c + '</option>'
+                ).join('');
+                
+                tr.innerHTML = 
+                  '<td>#' + idx + '</td>' +
+                  '<td><input id="mar' + idx + '" type="number" min="0" max="100" step="0.01" value="92" /></td>' +
+                  '<td><select id="credit' + idx + '">' + creditOptions + '</select></td>' +
+                  '<td><input id="aprmax' + idx + '" type="number" min="0" step="0.01" placeholder="% apr" /></td>' +
+                  '<td class="mono small result" id="allorate' + idx + '">-</td>' +
+                  '<td class="mono small result" id="aprprov' + idx + '">-</td>';
+                
+                tbody.appendChild(tr);
+              };
+            })();
+          `;
+          document.body.appendChild(script);
+        }
+      } catch (e) {
+        console.error('[calculator] Failed to load pool credits', e);
+      }
+    }
+    
+    function updateCreditDropdowns(creditList) {
+      // Update all existing credit select elements
+      const selects = document.querySelectorAll('select[id^="credit"]');
+      selects.forEach(select => {
+        const currentValue = select.value;
+        select.innerHTML = '';
+        creditList.forEach(credit => {
+          const option = document.createElement('option');
+          option.value = credit;
+          option.textContent = credit;
+          select.appendChild(option);
+        });
+        // Restore selection if value exists
+        if (currentValue && creditList.includes(Number(currentValue))) {
+          select.value = currentValue;
+        }
+      });
+    }
+    
+    // Tab switching
+    document.addEventListener('DOMContentLoaded', () => {
+      // Try to load credits after a delay to ensure contracts are ready
+      setTimeout(() => {
+        loadPoolCredits();
+      }, 1000);
+      
+      const tabBtns = document.querySelectorAll('.tab-btn');
+      const tabContents = document.querySelectorAll('.tab-content');
+      
+      tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.disabled) return;
+          
+          // Remove active class from all
+          tabBtns.forEach(b => b.classList.remove('active'));
+          tabContents.forEach(c => c.classList.remove('active'));
+          
+          // Add active to clicked
+          btn.classList.add('active');
+          const tabId = 'tab-' + btn.dataset.tab;
+          document.getElementById(tabId)?.classList.add('active');
+        });
+      });
+    });
+  </script>
+</body>
+</html>

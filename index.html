@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staple Dashboard Prod</title>
+    <script>var toHome = "./";</script>
+    <script src="./src/components/navbar/navbar.js" defer></script>
+    <link rel="stylesheet" href="./src/components/navbar/navbar.css">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f9fafb;
+            color: #1f2937;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #111827;
+        }
+        p.subtitle {
+            font-size: 1.125rem;
+            color: #6b7280;
+            margin-bottom: 3rem;
+        }
+        .setup-panel {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .setup-panel h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+            color: #111827;
+        }
+        .setup-panel p {
+            font-size: 0.95rem;
+            color: #4b5563;
+            margin: 0 0 12px 0;
+            line-height: 1.6;
+        }
+        .setup-list {
+            margin: 0;
+            padding-left: 20px;
+            color: #374151;
+        }
+        .setup-list li {
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        .setup-command {
+            display: block;
+            margin-top: 6px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: #f3f4f6;
+            color: #111827;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+            font-size: 0.875rem;
+            overflow-x: auto;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 24px;
+        }
+        .card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            text-decoration: none;
+            color: inherit;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border-color: #d1d5db;
+        }
+        .card h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            color: #111827;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card p {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin: 0;
+            line-height: 1.5;
+            flex-grow: 1;
+        }
+        .card .arrow {
+            margin-top: 16px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #4f46e5;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .icon {
+            font-size: 1.5rem;
+        }
+        footer {
+            margin-top: 60px;
+            text-align: center;
+            font-size: 0.875rem;
+            color: #9ca3af;
+            padding-bottom: 40px;
+        }
+        footer a {
+            color: #6b7280;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+  <script>
+    if (window.location.protocol === 'file:') {
+      document.body.innerHTML = '<div style="max-width:720px;margin:48px auto;padding:24px;border:1px solid #444;border-radius:12px;font-family:Arial,sans-serif;line-height:1.6"><h2>HTTP server required</h2><p>This dashboard cannot run through file URLs because browser security isolates local files into unique origins.</p><p>Start a local server from the repository root with:</p><pre style="padding:12px;border-radius:8px;background:#f3f4f6;overflow:auto">npm run start:local</pre><p>The default local URL is:</p><pre style="padding:12px;border-radius:8px;background:#f3f4f6;overflow:auto">http://127.0.0.1:8787</pre><p>You may override the port, for example:</p><pre style="padding:12px;border-radius:8px;background:#f3f4f6;overflow:auto">PORT=39001 npm run start:local</pre></div>';
+      throw new Error('Staple Dashboard must be opened through HTTP, not file://');
+    }
+  </script>
+    <div class="container">
+        <h1>Staple Dashboard Prod</h1>
+        <p class="subtitle">Production-oriented Staple dashboard for environment setup, wallet-backed actions, pools, pricing, and swaps.</p>
+
+        <section class="setup-panel">
+            <h2>Local Startup Flow</h2>
+            <p>Always open the dashboard through HTTP. The recommended local flow is:</p>
+            <ol class="setup-list">
+                <li>
+                    Install dependencies.
+                    <span class="setup-command">npm install</span>
+                </li>
+                <li>
+                    Start the local static server from the repository root.
+                    <span class="setup-command">npm run start:local</span>
+                </li>
+                <li>
+                    Open the dashboard in the browser. By default it is:
+                    <span class="setup-command">http://127.0.0.1:8787</span>
+                </li>
+            </ol>
+            <p>If port 8787 is already occupied, start the server with another port, for example <span class="setup-command">PORT=39001 npm run start:local</span>, then open the matching URL.</p>
+        </section>
+
+        <div class="grid">
+            <a href="./src/pages/environment/index.html" class="card">
+                <h2><span class="icon">⚙️</span> Environment</h2>
+                <p>Configure RPC, Address Provider, saved accounts, and optional browser wallet access across local, forked, and production-like environments.</p>
+                <div class="arrow">Go to Environment &rarr;</div>
+            </a>
+
+            <a href="./src/pages/testtoken/index.html" class="card">
+                <h2><span class="icon">🪙</span> Test Tokens</h2>
+                <p>Mint ETH and test tokens when you are on Anvil, local fork, or another environment that exposes test-token tooling.</p>
+                <div class="arrow">Go to Test Tokens &rarr;</div>
+            </a>
+
+            <a href="./src/pages/jr-pricing/index.html" class="card">
+                <h2><span class="icon">📈</span> JR Pricing</h2>
+                <p>Inspect Bondify Jr oracle state, refresh configured pairs, and manage JR pricing flows per environment profile.</p>
+                <div class="arrow">Go to JR Pricing &rarr;</div>
+            </a>
+
+            <a href="./src/pages/pools-vtps/index.html" class="card">
+                <h2><span class="icon">🌊</span> Pools & Positions</h2>
+                <p>Inspect pools and manage user positions with shared address resolution, local/private-key signers, or optional wallet signing.</p>
+                <div class="arrow">Go to Pools & Positions &rarr;</div>
+            </a>
+
+            <a href="./src/pages/swap/index.html" class="card">
+                <h2><span class="icon">🔄</span> Swap</h2>
+                <p>Execute token swaps with smart routing and slippage protection.</p>
+                <div class="arrow">Go to Swap &rarr;</div>
+            </a>
+
+            <a href="./src/pages/calc/index.html" class="card">
+                <h2><span class="icon">🧮</span> Calculator</h2>
+                <p>Simulate swaps and calculate optimal APR strategies without on-chain interaction.</p>
+                <div class="arrow">Go to Calculator &rarr;</div>
+            </a>
+
+            <a href="./src/pages/arbitrage/index.html" class="card">
+                <h2><span class="icon">🧪</span> Arbitrage</h2>
+                <p>Use development and operator-lab arbitrage tools in environments where mock DEX and simulation flows are available.</p>
+                <div class="arrow">Go to Arbitrage &rarr;</div>
+            </a>
+
+            <a href="./src/pages/errors/index.html" class="card">
+                <h2><span class="icon">⚠️</span> Errors</h2>
+                <p>Decode contract error signatures to debug failed transactions.</p>
+                <div class="arrow">Go to Errors &rarr;</div>
+            </a>
+        </div>
+
+        <footer>
+            <!-- <p>For detailed documentation, please refer to the <a href="./README.md">README</a>.</p> -->
+            <p>&copy; Staple</p>
+        </footer>
+    </div>
+</body>
+</html>

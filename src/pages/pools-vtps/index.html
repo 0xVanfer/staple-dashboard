@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta name="description" content="Staple Dashboard - Pools & Vtps" />
+  <title>Pools & Vtps</title>
+  <link rel="icon" href="data:," />
+  <!-- Styles -->
+  <link rel="stylesheet" href="../../components/navbar/navbar.css" />
+  <link rel="stylesheet" href="../../lib/common.css" />
+  <link rel="stylesheet" href="./pools-vtps.css" />
+</head>
+<body>
+  <div class="pools-vtps-layout">
+    <!-- Left sidebar: narrower filter panel -->
+    <aside id="filter-panel" class="filter-panel">
+      <div class="filter-header">
+        <h3>Pools</h3>
+        <button id="refresh-btn" class="refresh-btn">Refresh</button>
+      </div>
+      
+      <!-- Action buttons -->
+      <div class="action-buttons">
+        <button id="create-pool-btn" class="action-btn">Create Pool</button>
+        <button id="create-vtp-btn" class="action-btn">Create VTP</button>
+        <button id="modify-risk-btn" class="action-btn">Modify Risk</button>
+      </div>
+      
+      <!-- Search bar -->
+      <div class="search-container">
+        <input type="text" id="search-input" placeholder="Search by symbol or ID..." />
+      </div>
+      
+      <!-- List container -->
+      <div id="filter-list" class="filter-list">
+        <!-- Dynamic content will be inserted here -->
+      </div>
+    </aside>
+    
+    <!-- Main content area: 85% - divided into 3 sections -->
+    <main class="main-content">
+      <!-- Detail section: 15% of 85% = ~15% of total -->
+      <section id="detail-section" class="detail-section">
+        <div class="section-title">Details</div>
+        <div id="detail-content" class="detail-content">
+          <!-- Selected pool/vtp details -->
+        </div>
+      </section>
+      
+      <!-- Related items section: 50% of 85% = ~43% of total -->
+      <section id="related-section" class="related-section">
+        <div class="section-title">Related Items</div>
+        <div id="related-content" class="related-content">
+          <!-- VTPs for selected pool or VtpTokens for selected VTP -->
+        </div>
+      </section>
+      
+      <!-- Actions section: 20% of 85% = ~17% of total -->
+      <section id="actions-section" class="actions-section">
+        <div class="section-title">Actions</div>
+        <div id="actions-content" class="actions-content">
+          <!-- Write methods: deposit, withdraw, adjust, etc. -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Global navigation dependency path variable -->
+  <script>
+    // toHome is used by navbar.js to return to the home page path
+    var toHome = "../../../";
+  </script>
+
+  <!-- Third-party libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.0/dist/ethers.umd.min.js" defer></script>
+
+  <!-- ABI / Contract Interfaces -->
+  <script src="../../../abigen/stapleTestERC20Factory/stapleTestERC20Factory.js"></script>
+  <script src="../../../abigen/stapleUIPoolDataProvider/stapleUIPoolDataProvider.js" defer></script>
+  <script src="../../../abigen/stapleController/stapleController.js" defer></script>
+  <script src="../../../abigen/stapleRouter/stapleRouter.js" defer></script>
+  <script src="../../../abigen/staplePoolBasic/staplePoolBasic.js" defer></script>
+  <script src="../../../abigen/erc20Metadata/erc20Metadata.js" defer></script>
+  <script src="../../../abigen/stapleIncentivesController/stapleIncentivesController.js" defer></script>
+  <script src="../../../abigen/stapleRedstoneExtractor/stapleRedstoneExtractor.js" defer></script>
+  <script src="../../../abigen/stapleOracleVerifierExtensions/stapleOracleVerifierExtensions.js" defer></script>
+  <script src="../../../abigen/staplePriceProvider/staplePriceProvider.js" defer></script>
+
+  <!-- Common Tools -->
+  <script src="../../lib/common.js?v=20260521r" defer></script>
+  <script src="../../lib/rpcManager.js"></script>
+  <script src="../../lib/contractCalls.js" defer></script>
+  <script src="../../lib/chainlinkStream.js"></script>
+
+  <!-- Environment & Navigation -->
+  <script src="../environment/environment.js?v=20260521r" defer></script>
+  <script src="../../components/navbar/navbar.js" defer></script>
+
+  <!-- Price verification -->
+  <script src="../testtoken/testtoken.verify.js" defer></script>
+
+  <!-- Business Scripts -->
+  <script src="./pools-vtps.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+/* Button styles */
+button{
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+/* Container for the layout */
+.container {
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    height: calc(100vh - 40px);
+}
+
+/* Sidebar styles */
+.sidebar {
+    width: 25%;
+    background-color: #fff;
+    padding: 20px;
+    border-right: 2px solid #ddd;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow-y: auto;
+    height: 100%;
+}
+
+/* Tag styles */
+.tag {
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+/* Tag header styles */
+.tag-header {
+    background-color: #f4f7fb;
+    padding: 12px;
+    cursor: pointer;
+}
+
+.tag-header h2 {
+    margin: 0;
+    font-size: 16px;
+}
+
+/* Tag body styles */
+.tag-body {
+    padding: 10px;
+    display: none;
+    overflow: hidden;
+    height: 0;
+}
+
+/* Active tag styles */
+.tag.active .tag-body {
+    display: block;
+    height: auto;
+}
+
+/* Tag button styles */
+.tag-button {
+    width: 100%;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+/* Main content styles */
+.main-content {
+    width: 75%;
+    background-color: #fff;
+    padding: 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Output wrapper styles */
+.output-wrapper {
+    margin-top: 2px;
+    flex: 1;
+}
+
+/* Output title styles */
+#output-title {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    padding-bottom: 10px;
+    z-index: 1;
+}
+
+/* Textarea styles */
+textarea {
+    font-family: 'Courier New', monospace;
+    font-size: 15px;
+    resize: vertical;
+    height: 100%;
+    width: 100%;
+    overflow-y: scroll;
+    white-space: pre-wrap;
+    line-height: 1.4;
+    color: #333;
+    border: 0px solid #ccc;
+}
+
+/* Select styles */
+select {
+    background-color: #f4f7fb;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.3s ease-in-out;
+}
+
+select:hover {
+    border-color: #4CAF50;
+}
+
+select:focus {
+    outline: none;
+    border-color: #4CAF50;
+    background-color: #fff;
+}
+
+/* Option styles */
+option {
+    padding: 8px 12px;
+    background-color: #fff;
+    color: #333;
+}
+
+option:hover {
+    background-color: #f0f0f0;
+}
+
+/* Copy button styles */
+.copy-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    border: none;
+    background-color: #28a745;
+    color: white;
+    border-radius: 5px;
+}
+.copy-btn:hover {
+    background-color: #218838;
+}
+.copied {
+    display: inline-block;
+    margin-left: 10px;
+    color: #28a745;
+    font-size: 12px;
+    visibility: hidden;
+}
+
+/* Output container styles */
+#output-container {
+    flex: 0 0 70%;
+    padding: 0 20px;
+    overflow-y: auto;
+}
+
+/* Result styles */
+.result {
+    font-size: 15px;
+    margin: 5px 0;
+}
+
+/* Horizontal rule styles */
+hr {
+    margin: 10px 0;
+    border: 1px solid #ccc;
+}
+
+/* Address styles */
+.address {
+    font-family: monospace;
+}
+
+/* Empty line styles */
+.empty-line {
+    height: 10px;
+}
+
+/* Addresses input styles */
+.addresses_input {
+    padding: 10px;
+    font-size: 14px;
+    margin-bottom: 10px;
+    width: 90%;
+    height: 20px;
+    border-radius: 5px;
+    border: 1px solid gray;
+    resize: none;
+    overflow-y: auto;
+}
+
+/* Link styles */
+a {
+    color: blue;
+    text-decoration: underline;
+}

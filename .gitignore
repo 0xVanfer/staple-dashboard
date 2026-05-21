@@ -1,0 +1,13 @@
+abigen/*/*.go
+abigen/*/*.abi
+abigen/*/*.json
+
+# Test files
+**/test-*.html
+contracts/
+
+# Node / Playwright
+node_modules/
+playwright-report/
+test-results/
+.e2e-logs/

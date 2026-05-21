@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Errors Lookup</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <script>var toHome = "../../../";</script>
+  
+  <!-- Error Map Data -->
+  <script src="./errorMap.js"></script>
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="../../components/navbar/navbar.css" />
+  <link rel="stylesheet" href="./errors.css" />
+</head>
+<body>
+  <div class="errors-page">
+    <div class="errors-header">
+      <h1>Contract Errors Lookup</h1>
+      <p class="header-desc">Search for contract error information by signature</p>
+    </div>
+
+    <div class="errors-container">
+      <!-- Search Section -->
+      <div class="search-card">
+        <h3>Search Error Signature</h3>
+        
+        <div class="search-input-group">
+          <input 
+            type="text" 
+            id="error-search-input" 
+            placeholder="Enter error signature (e.g., 0x2d5fb10f or 2d5fb10f)"
+            autocomplete="off"
+          />
+          <button id="btn-search" class="btn-primary">Search</button>
+          <button id="btn-clear" class="btn-secondary">Clear</button>
+        </div>
+
+        <div class="search-hint">
+          💡 Tip: You can enter the signature with or without the '0x' prefix. 
+          Fuzzy search is supported - partial matches will be shown.
+        </div>
+      </div>
+
+      <!-- Results Section -->
+      <div class="results-card">
+        <h3>Search Results</h3>
+        
+        <div id="results-container" class="results-empty">
+          <p class="empty-message">
+            Enter an error signature above and click Search to find error information.
+          </p>
+        </div>
+      </div>
+
+      <!-- All Errors Section -->
+      <div class="all-errors-card">
+        <details>
+          <summary>
+            <span>📋 View All Errors (<span id="total-errors-count">0</span>)</span>
+            <span class="expand-icon">▼</span>
+          </summary>
+          <div class="all-errors-content">
+            <div id="all-errors-list"></div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../components/navbar/navbar.js" defer></script>
+  <script src="./errors.js" defer></script>
+</body>
+</html>

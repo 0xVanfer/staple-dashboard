@@ -1,0 +1,788 @@
+:root {
+    --primary: #5a67d8;
+    --primary-hover: #4c51bf;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --bg: #f7fafc;
+    --card-bg: #ffffff;
+    --border: #e2e8f0;
+    --text: #1a202c;
+    --text-secondary: #718096;
+    --hover-bg: #edf2f7;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.swap-page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.swap-container {
+    display: grid;
+    grid-template-columns: 480px 1fr;
+    gap: 24px;
+    align-items: start;
+}
+
+/* Swap Card (Left) */
+.swap-card {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+}
+
+.swap-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.swap-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.settings-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.settings-btn:hover {
+    background: var(--hover-bg);
+}
+
+/* Token Input */
+.token-input-container {
+    background: var(--bg);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 8px;
+}
+
+.token-input-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.token-input-header label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.balance-label {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.token-input {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.token-input input {
+    flex: 1;
+    background: none;
+    border: none;
+    font-size: 24px;
+    font-weight: 500;
+    outline: none;
+    color: var(--text);
+}
+
+.token-input input::placeholder {
+    color: #cbd5e0;
+}
+
+.token-input input:read-only {
+    color: var(--text-secondary);
+}
+
+.token-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    border: none;
+    border-radius: 12px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    transition: all 0.2s;
+}
+
+.token-select:hover {
+    background: var(--hover-bg);
+}
+
+.dropdown-arrow {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Swap Direction */
+.swap-direction {
+    display: flex;
+    justify-content: center;
+    margin: -12px 0;
+    position: relative;
+    z-index: 1;
+}
+
+.swap-direction-btn {
+    background: var(--card-bg);
+    border: 4px solid var(--bg);
+    border-radius: 12px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-secondary);
+}
+
+.swap-direction-btn:hover {
+    color: var(--primary);
+    transform: rotate(180deg);
+}
+
+/* Slippage */
+.slippage-container {
+    margin: 16px 0;
+    padding: 16px;
+    background: var(--bg);
+    border-radius: 12px;
+}
+
+.slippage-header {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text);
+}
+
+.slippage-options {
+    display: flex;
+    gap: 8px;
+}
+
+.slippage-btn {
+    flex: 1;
+    padding: 8px;
+    background: white;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.slippage-btn:hover {
+    border-color: var(--primary);
+}
+
+.slippage-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.slippage-custom {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: white;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 0 8px;
+}
+
+.slippage-custom input {
+    width: 60px;
+    border: none;
+    outline: none;
+    font-size: 14px;
+    padding: 4px;
+}
+
+/* Swap Info */
+.swap-info {
+    margin: 16px 0;
+    padding: 16px;
+    background: var(--bg);
+    border-radius: 12px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    font-size: 14px;
+}
+
+.info-row span:first-child {
+    color: var(--text-secondary);
+}
+
+.info-row span:last-child {
+    color: var(--text);
+    font-weight: 500;
+}
+
+.impact-low {
+    color: var(--success);
+}
+
+.impact-medium {
+    color: var(--warning);
+}
+
+.impact-high {
+    color: var(--danger);
+}
+
+/* Swap Button */
+.swap-btn {
+    width: 100%;
+    padding: 18px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+}
+
+.swap-btn:hover:not(:disabled) {
+    background: var(--primary-hover);
+}
+
+.swap-btn:disabled {
+    background: #cbd5e0;
+    cursor: not-allowed;
+}
+
+.quick-info {
+    margin-top: 12px;
+    padding: 12px;
+    background: #fffbeb;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #92400e;
+}
+
+.quick-info p {
+    margin: 0;
+}
+
+/* Routes Panel (Right) */
+.routes-panel {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+}
+
+.routes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.routes-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.routes-count {
+    background: var(--bg);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.route-section {
+    margin-bottom: 24px;
+}
+
+.route-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.route-empty {
+    padding: 32px;
+    text-align: center;
+    color: var(--text-secondary);
+    background: var(--bg);
+    border-radius: 12px;
+    font-size: 14px;
+}
+
+.routes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Path sections */
+.paths-section {
+    margin-bottom: 16px;
+}
+
+.paths-section:last-child {
+    margin-bottom: 0;
+}
+
+.paths-section .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Path items in all-paths list */
+.routes-list .path-item {
+    padding: 12px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 8px;
+}
+
+.routes-list .path-item:last-child {
+    margin-bottom: 0;
+}
+
+.routes-list .path-item:hover:not(.no-liquidity) {
+    border-color: var(--primary);
+    background: white;
+}
+
+.routes-list .path-item.selected {
+    border-color: var(--primary);
+    background: #eef2ff;
+    box-shadow: 0 0 0 2px rgba(90, 103, 216, 0.2);
+}
+
+.routes-list .path-item.best {
+    border-color: var(--success);
+    background: #ecfdf5;
+}
+
+.routes-list .path-item.best::before {
+    content: '🏆 ';
+}
+
+.routes-list .path-item.best.selected {
+    border-color: var(--success);
+    background: #d1fae5;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+/* No liquidity paths */
+.routes-list .path-item.no-liquidity {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: #fef2f2;
+    border-color: #fecaca;
+    border-style: dashed;
+}
+
+.routes-list .path-item.no-liquidity:hover {
+    border-color: #fecaca;
+    background: #fef2f2;
+}
+
+.routes-list .path-item.no-liquidity .assets {
+    color: #9ca3af;
+    text-decoration: line-through;
+}
+
+.routes-list .path-item .path-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.routes-list .path-item .assets {
+    font-weight: 500;
+    color: var(--text);
+    flex: 1;
+    min-width: 200px;
+}
+
+.routes-list .path-item .badge {
+    background: rgba(90, 103, 216, 0.1);
+    color: var(--primary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.route-card {
+    padding: 12px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.route-card:hover {
+    border-color: var(--primary);
+    background: white;
+}
+
+.route-card.active {
+    border-color: var(--primary);
+    background: #eef2ff;
+}
+
+.route-card.invalid {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.route-path {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text);
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.route-output {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.route-section-collapsible {
+    margin-top: 16px;
+}
+
+.route-section-collapsible summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    list-style: none;
+    padding: 12px;
+    background: var(--bg);
+    border-radius: 12px;
+    margin-bottom: 12px;
+}
+
+.route-section-collapsible summary::-webkit-details-marker {
+    display: none;
+}
+
+.expand-icon {
+    transition: transform 0.2s;
+}
+
+.route-section-collapsible[open] .expand-icon {
+    transform: rotate(180deg);
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 10002;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 20px;
+    width: 90%;
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+}
+
+.modal-close:hover {
+    background: var(--bg);
+}
+
+.modal-body {
+    padding: 20px 24px;
+}
+
+.token-search {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    font-size: 16px;
+    margin-bottom: 16px;
+    outline: none;
+}
+
+.token-search:focus {
+    border-color: var(--primary);
+}
+
+.token-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.token-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.token-item:hover {
+    background: var(--bg);
+}
+
+.token-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.token-info {
+    flex: 1;
+}
+
+.token-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text);
+}
+
+.token-balance {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .swap-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .swap-card,
+    .routes-panel {
+        padding: 16px;
+        border-radius: 16px;
+    }
+    
+    .token-input input {
+        font-size: 20px;
+    }
+}
+
+/* Best Route Section - Prominent */
+.best-route-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+}
+
+.best-route-section h2 {
+    color: white !important;
+    font-size: 24px !important;
+    margin: 0 0 16px !important;
+}
+
+.best-route-display {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 20px;
+    color: white;
+    font-size: 16px;
+    line-height: 1.6;
+    min-height: 80px;
+}
+
+.best-route-display .path-item {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 16px;
+    border-radius: 10px;
+}
+
+/* User-selected non-optimal path styling */
+.best-route-display .path-item.user-selected {
+    background: rgba(217, 119, 6, 0.15);
+    border: 2px solid rgba(217, 119, 6, 0.5);
+}
+
+.best-route-display .path-item.user-selected .path-label {
+    color: #fbbf24 !important;
+}
+
+/* Best path indicator */
+.best-route-display .path-item.best .path-label {
+    color: #34d399 !important;
+}
+
+.best-route-display .path-head {
+    color: white;
+    font-size: 15px;
+}
+
+.best-route-display .badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.best-route-display .assets {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+/* Expandable Sections */
+.expandable-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.route-details-section {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.route-details-section summary {
+    list-style: none;
+    user-select: none;
+}
+
+.route-details-section summary::-webkit-details-marker {
+    display: none;
+}
+
+.route-details-section[open] .expand-icon {
+    transform: rotate(180deg);
+}
+
+.expand-icon {
+    transition: transform 0.2s;
+    display: inline-block;
+}
+
+/* VTP Detail boxes in estimate */
+.vtp-detail {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    font-size: 13px;
+}
+
+.vtp-detail .kv {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+    margin: 6px 0;
+}
+
+.vtp-detail .kv > div {
+    padding: 4px 0;
+}

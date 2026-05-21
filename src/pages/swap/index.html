@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swap</title>
+    <link rel="icon" href="data:," />
+    <script>var toHome = "../../../";</script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.0/dist/ethers.umd.min.js"></script>
+    <script src="../../components/navbar/navbar.js" defer></script>
+
+    <script src="../../../abigen/stapleUIPoolDataProvider/stapleUIPoolDataProvider.js"></script>
+    <script src="../../../abigen/stapleController/stapleController.js"></script>
+    <script src="../../../abigen/staplePoolBasic/staplePoolBasic.js"></script>
+    <script src="../../../abigen/erc20Metadata/erc20Metadata.js"></script>
+    <script src="../../../abigen/stapleRedstoneExtractor/stapleRedstoneExtractor.js"></script>
+    <script src="../../../abigen/stapleOracleVerifierExtensions/stapleOracleVerifierExtensions.js"></script>
+    <script src="../../../abigen/staplePriceProvider/staplePriceProvider.js"></script>
+    <script src="../../../abigen/stapleTestERC20Factory/stapleTestERC20Factory.js"></script>
+    <script src="../../../abigen/stapleRouter/stapleRouter.js"></script>
+
+    <script src="../../lib/common.js?v=20260521r"></script>
+    <script src="../../lib/rpcManager.js"></script>
+    <script src="../../lib/contractCalls.js"></script>
+    <script src="../../lib/chainlinkStream.js"></script>
+    <script src="../environment/environment.js?v=20260521r" defer></script>
+    <script src="../testtoken/testtoken.verify.js" defer></script>
+    
+    <link rel="stylesheet" href="../../components/navbar/navbar.css">
+    <link rel="stylesheet" href="./swap.css">
+    <script src="./swap.graph.js" defer></script>
+    <script src="./swap.ui.js" defer></script>
+    <script src="./swap.main.js" defer></script>
+</head>
+
+<body>
+  <div class="swap-page">
+    <div class="swap-container">
+      <!-- Left Side: Swap Interface -->
+      <div class="swap-card">
+        <div class="swap-header">
+          <h2>Swap</h2>
+          <button class="settings-btn" title="Settings">⚙️</button>
+        </div>
+
+        <!-- From Token -->
+        <div class="token-input-container">
+          <div class="token-input-header">
+            <label>From</label>
+            <span class="balance-label" id="from-balance">Balance: -</span>
+          </div>
+          <div class="token-input">
+            <input type="text" id="swap-amount" placeholder="0.0" inputmode="decimal" style="flex:1;padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:16px;">
+            <select id="swap-from" style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;background:white;min-width:150px;">
+              <option value="">Select token</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Swap Direction Button -->
+        <div class="swap-direction">
+          <button class="swap-direction-btn" id="btn-swap-direction" title="Switch tokens">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M12 5L8 1M8 1L4 5M8 1V11M4 11L8 15M8 15L12 11M8 15V5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- To Token -->
+        <div class="token-input-container">
+          <div class="token-input-header">
+            <label>To</label>
+            <span class="balance-label" id="to-balance">Balance: -</span>
+          </div>
+          <div class="token-input">
+            <input type="text" id="swap-output" placeholder="0.0" readonly style="flex:1;padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:16px;background:#f9fafb;">
+            <select id="swap-to" style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;background:white;min-width:150px;">
+              <option value="">Select token</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Slippage Settings (Hidden by default) -->
+        <div class="slippage-container" id="slippage-settings" style="display:none;">
+          <div class="slippage-header">
+            <span>Slippage Tolerance</span>
+          </div>
+          <div class="slippage-options">
+            <button class="slippage-btn active" data-slippage="0.3">0.3%</button>
+            <button class="slippage-btn" data-slippage="0.5">0.5%</button>
+            <button class="slippage-btn" data-slippage="1">1%</button>
+            <div class="slippage-custom">
+              <input type="number" id="custom-slippage" placeholder="Custom" step="0.1" min="0" max="50" value="0.3">
+              <span>%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Swap/Execute Button -->
+        <button class="swap-btn" id="btn-execute-swap" disabled>
+          Select tokens to swap
+        </button>
+
+        <!-- Quick Info -->
+        <div class="quick-info">
+          <p>💡 Maximum 3 hops. Best path is automatically selected.</p>
+        </div>
+      </div>
+
+      <!-- Right Side: Routes -->
+      <div class="routes-panel">
+        <!-- Selected Route (Prominent) -->
+        <div class="best-route-section">
+          <h2 style="font-size:24px;margin:0 0 16px;color:#1f2937;">📍 Selected Route</h2>
+          <p style="font-size:13px;color:#6b7280;margin:0 0 12px;">Click any route below to select it</p>
+          <div id="best-path-summary" class="best-route-display">
+            Select tokens to see routes
+          </div>
+        </div>
+
+        <!-- Expandable sections row -->
+        <div class="expandable-sections">
+          <!-- Estimate Details -->
+          <details class="route-details-section" id="estimate-details">
+            <summary style="cursor:pointer;font-weight:600;padding:12px;background:#f9fafb;border-radius:8px;margin-bottom:8px;">
+              <span>📊 Valuation Details</span>
+              <span class="expand-icon" style="float:right;">▼</span>
+            </summary>
+            <div id="best-path-detail" style="padding:12px;background:white;border:1px solid #e5e7eb;border-radius:8px;">
+              <!-- Populated by JS -->
+            </div>
+          </details>
+
+          <!-- All Paths -->
+          <details class="route-details-section">
+            <summary style="cursor:pointer;font-weight:600;padding:12px;background:#f9fafb;border-radius:8px;margin-bottom:8px;">
+              <span>🛣️ All Routes</span>
+              <span id="routes-count" style="margin-left:8px;color:#6b7280;font-size:13px;">0 routes</span>
+              <span class="expand-icon" style="float:right;">▼</span>
+            </summary>
+            <div id="all-paths" class="routes-list" style="padding:12px;background:white;border:1px solid #e5e7eb;border-radius:8px;">
+              <!-- Populated by JS -->
+            </div>
+          </details>
+        </div>
+
+        <!-- Execute Area (hidden, moved to main button) -->
+        <div id="execute-area" style="display:none;">
+          <!-- This is now handled by the main swap button -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Settings toggle - wrapped in DOMContentLoaded to ensure DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      const settingsBtn = document.querySelector('.settings-btn');
+      const slippageSettings = document.getElementById('slippage-settings');
+      
+      if (settingsBtn && slippageSettings) {
+        settingsBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const isVisible = slippageSettings.style.display !== 'none';
+          slippageSettings.style.display = isVisible ? 'none' : 'block';
+        });
+      }
+
+      // Slippage selection
+      document.querySelectorAll('.slippage-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.slippage-btn').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          // Update custom slippage input
+          const slippage = this.getAttribute('data-slippage');
+          const customInput = document.getElementById('custom-slippage');
+          if (customInput) customInput.value = slippage;
+        });
+      });
+      
+      // Custom slippage input handler
+      const customSlippageInput = document.getElementById('custom-slippage');
+      if (customSlippageInput) {
+        customSlippageInput.addEventListener('input', function() {
+          // Deactivate all buttons when custom value is entered
+          document.querySelectorAll('.slippage-btn').forEach(b => b.classList.remove('active'));
+        });
+      }
+    });
+  </script>
+</body>
+</html>

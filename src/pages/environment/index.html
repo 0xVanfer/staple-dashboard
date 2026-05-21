@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environment</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.0/dist/ethers.umd.min.js"></script>
+    <script src="../../../abigen/stapleTestERC20Factory/stapleTestERC20Factory.js"></script>
+    <script src="../../../abigen/stapleUIPoolDataProvider/stapleUIPoolDataProvider.js"></script>
+    <script src="../../../abigen/stapleController/stapleController.js"></script>
+    <script src="../../../abigen/mockExternalDexExtentions/mockExternalDexExtentions.js"></script>
+    <script src="../../lib/common.js?v=20260521r"></script>
+    <script src="../../lib/rpcManager.js"></script>
+    <script src="../../lib/contractCalls.js"></script>
+    <script src="./environment.js?v=20260521r" defer></script>
+    <script>var toHome = "../../../";</script>
+    <script src="../../components/navbar/navbar.js" defer></script>
+
+    <link rel="stylesheet" href="../../components/navbar/navbar.css">
+    <link rel="stylesheet" href="./environment.css?v=20260521r">
+</head>
+<body>
+    <div class="env-layout">
+        <div class="env-sidebar">
+            <div class="sidebar-header"><h2>Settings</h2></div>
+            <nav class="sidebar-nav">
+                <div class="nav-item active" data-tab="environment-setup"><span class="icon">🌐</span> Environment Setup</div>
+                <div class="nav-item" data-tab="fixed-addresses-tab"><span class="icon">📋</span> Resolved Addresses</div>
+                <div class="nav-item" data-tab="user-settings"><span class="icon">👛</span> Wallet & Accounts</div>
+                <div class="nav-item" data-tab="pool-info"><span class="icon">🏊</span> Pool Info</div>
+                <div class="nav-item" data-tab="symbols"><span class="icon">🔣</span> Symbols</div>
+                <div class="nav-item" data-tab="authorization-management"><span class="icon">🔐</span> Access Control</div>
+                <div class="nav-item" data-tab="minter-v2"><span class="icon">🪙</span> Minter</div>
+            </nav>
+            <div class="sidebar-footer"><a href="../../../index.html" class="back-link">← Back to Home</a></div>
+        </div>
+
+        <div class="env-content">
+            <!-- Environment Setup Tab -->
+            <div id="environment-setup" class="tab-pane active">
+                <div class="pane-header modern-pane-header">
+                    <div>
+                        <div class="pane-kicker">Environment</div>
+                        <h1>RPC Workspace</h1>
+                        <p class="pane-summary">Choose the transport endpoint, inspect chain and block data in the same place, and manage RPC entries without mixing endpoint transport with global address settings.</p>
+                    </div>
+                </div>
+                <div class="pane-body modern-pane-body">
+                    <div class="setup-flow vertical-workflow">
+                        <section class="card feature-card rpc-workspace-card">
+                            <div class="section-heading-row">
+                                <div>
+                                    <h3>Current RPC</h3>
+                                    <p class="section-desc">This area combines active endpoint selection, live chain and block reads, and inline RPC editing into one readable workflow.</p>
+                                </div>
+                            </div>
+                            <div id="current-block-info" class="active-rpc-card feature-surface rpc-runtime-card">Reading...</div>
+                            <div class="form-grid vertical-form rpc-selector-form">
+                                <div class="form-item">
+                                    <label>Active RPC</label>
+                                    <select id="rpc-select" class="form-control"></select>
+                                </div>
+                            </div>
+                            <div id="rpc-directory" class="user-list rpc-directory-list"></div>
+                            <div class="editor-panel rpc-editor-panel">
+                                <div class="editor-panel-header">
+                                    <div>
+                                        <h4>RPC Editor</h4>
+                                        <p id="rpc-editor-mode" class="section-desc">Create a new RPC entry or choose one from the list to edit.</p>
+                                    </div>
+                                </div>
+                                <div class="form-grid vertical-form compact-form">
+                                    <div class="form-item">
+                                        <label>RPC Name</label>
+                                        <input id="rpc-form-name" type="text" class="form-control" placeholder="Mainnet Public Endpoint">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>RPC URL</label>
+                                        <input id="rpc-form-url" type="url" class="form-control mono" placeholder="https://...">
+                                    </div>
+                                    <div class="form-actions">
+                                        <button id="btn-save-rpc" class="btn btn-primary">Add RPC</button>
+                                        <button id="btn-new-rpc" class="btn btn-secondary">New Draft</button>
+                                        <button id="btn-delete-rpc" class="btn btn-danger" style="display:none">Delete RPC</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="card feature-card credentials-bottom-card">
+                            <div class="section-heading-row">
+                                <div>
+                                    <h3>Chainlink Stream Credentials</h3>
+                                    <p class="section-desc">These credentials sit at the bottom on purpose. They are infrastructure details and should stay separate from RPC transport and address browsing. For internal use, prefer a password manager and optionally remember them for this browser session only.</p>
+                                </div>
+                            </div>
+                            <div class="credential-session-bar">
+                                <label class="credential-session-toggle"><input id="remember-chainlink-session" type="checkbox"> Remember for this session</label>
+                                <button id="btn-clear-chainlink-session" type="button" class="btn btn-sm btn-secondary">Forget Session</button>
+                                <div id="chainlink-session-status" class="credential-session-status">Stored in current page memory only. Use a password manager to refill when needed.</div>
+                            </div>
+                            <div class="credential-grid">
+                                <form class="credential-panel" onsubmit="return false;">
+                                    <label>API Key</label>
+                                    <span id="current-chainlink-key" class="value-display mono">Not Set</span>
+                                    <input id="input-chainlink-key" type="text" class="form-control" placeholder="API Key">
+                                    <button id="submit-chainlink-key" type="button" class="btn btn-sm btn-primary">Update</button>
+                                </form>
+                                <form class="credential-panel" onsubmit="return false;">
+                                    <label>API Secret</label>
+                                    <span id="current-chainlink-secret" class="value-display mono">Not Set</span>
+                                    <input id="input-chainlink-secret" type="password" class="form-control" placeholder="API Secret">
+                                    <button id="submit-chainlink-secret" type="button" class="btn btn-sm btn-primary">Update</button>
+                                </form>
+                            </div>
+                        </section>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resolved Addresses Tab -->
+            <div id="fixed-addresses-tab" class="tab-pane">
+                <div class="pane-header modern-pane-header">
+                    <div>
+                        <div class="pane-kicker">Address View</div>
+                        <h1>Address Configuration & Resolution</h1>
+                        <p class="pane-summary">Manage the saved Staple version bindings first, then browse the final addresses exactly as the dashboard resolves them. Bondify and Jr Pricing stay fixed in the front-end.</p>
+                    </div>
+                </div>
+                <div class="pane-body modern-pane-body">
+                    <div class="card feature-card registry-section">
+                        <div class="section-heading-row">
+                            <div>
+                                <h3>Address Configuration</h3>
+                            </div>
+                        </div>
+                        <div id="override-panel"></div>
+                    </div>
+                    <div class="card feature-card address-browser-card">
+                        <div class="section-heading-row">
+                            <div>
+                                <h3>Resolved Address Browser</h3>
+                                <p class="section-desc">Open a group to inspect the full address list. Each badge shows whether the value comes from the fixed front-end registry or live Address Provider discovery.</p>
+                            </div>
+                        </div>
+                        <div id="fixed-addresses-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Settings Tab -->
+            <div id="user-settings" class="tab-pane">
+                <div class="pane-header"><h1>Wallet & Account Settings</h1></div>
+                <div class="pane-body">
+                    <div class="card">
+                        <h3>Browser Wallet</h3>
+                        <p class="section-desc">Injected wallets are optional on Anvil/local RPC. For production writes, connect an explicit browser wallet. MetaMask and OKX are detected automatically; Ledger works through supported injected providers or wallet-side account bridges.</p>
+                        <div id="wallet-status-card" class="active-rpc-card feature-surface rpc-runtime-card">Scanning browser wallets...</div>
+                        <div class="form-grid vertical-form compact-form">
+                            <div class="form-item">
+                                <label>Detected Wallet</label>
+                                <select id="wallet-provider-select" class="form-control"></select>
+                            </div>
+                        </div>
+                        <div class="wallet-action-row">
+                            <button id="btn-refresh-wallets" class="btn btn-secondary">Refresh Wallets</button>
+                            <button id="btn-connect-wallet" class="btn btn-primary">Connect Wallet</button>
+                            <button id="btn-switch-wallet-network" class="btn btn-secondary">Switch Wallet Network</button>
+                            <button id="btn-disconnect-wallet" class="btn btn-secondary">Disconnect Wallet</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Saved Accounts</h3>
+                        <p class="section-desc">Saved accounts now store address metadata only. Manual private-key configuration is disabled. Randomly generated wallets reveal their private key once and never persist it in the dashboard.</p>
+                        <div id="user-list-container" class="user-list"></div>
+                    </div>
+                    <div class="card">
+                        <h3>Account Editor</h3>
+                        <p id="user-form-mode" class="section-desc">Create or select a user profile.</p>
+                        <div class="form-grid vertical-form">
+                            <div class="form-item">
+                                <label>Address</label>
+                                <input id="input-user-address" type="text" class="form-control" placeholder="0x...">
+                            </div>
+                            <div id="generated-user-secret-panel" class="form-item" style="display:none;">
+                                <label>Generated Private Key (Shown Once)</label>
+                                <input id="generated-user-private-key" type="text" class="form-control mono" readonly placeholder="Copy this now; it will not be saved">
+                                <div class="form-help">This private key is shown only for the newly generated random wallet. The dashboard never stores or replays it.</div>
+                            </div>
+                            <div class="form-item">
+                                <label>Nickname (Optional)</label>
+                                <input id="input-user-nickname" type="text" class="form-control" placeholder="Nickname">
+                            </div>
+                            <div class="form-item">
+                                <label>Tags (Optional)</label>
+                                <input id="input-user-tags" type="text" class="form-control" placeholder="deployer, local, prod">
+                            </div>
+                            <div class="form-item" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button id="submit-user-add" class="btn btn-primary">Add User</button>
+                                <button id="btn-cancel-user-edit" class="btn btn-secondary" style="display:none">Cancel Edit</button>
+                                <button id="btn-generate-random" class="btn btn-secondary" title="Generate random wallet">🎲 Random</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pool Info Tab -->
+            <div id="pool-info" class="tab-pane">
+                <div class="pane-header">
+                    <h1>Pool Info Cache</h1>
+                    <button id="btn-refresh-pool-info" class="btn btn-primary">Force Refresh</button>
+                </div>
+                <div class="pane-body">
+                    <div class="card">
+                        <div class="card-header"><h3>Cache Status</h3><span id="pool-info-status" class="badge">Checking...</span></div>
+                        <div class="card-body">
+                            <div class="info-row"><label>Last Updated:</label><span id="pool-info-timestamp" class="mono">-</span></div>
+                            <div class="info-row"><label>TTL:</label><span id="pool-info-ttl" class="mono">-</span></div>
+                            <div class="info-row"><label>Expires In:</label><span id="pool-info-expires" class="mono">-</span></div>
+                            <div class="info-row"><label>Pool Length:</label><span id="pool-info-length" class="mono">-</span></div>
+                            <div class="info-row"><label>VTP Length:</label><span id="pool-info-vtp-length" class="mono">-</span></div>
+                        </div>
+                    </div>
+                    <div class="card mt-4">
+                        <div class="card-header"><h3>Raw Data Preview</h3></div>
+                        <div class="card-body"><pre id="pool-info-preview" class="code-block" style="max-height:300px;overflow-y:auto;">No data</pre></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Symbols Tab -->
+            <div id="symbols" class="tab-pane">
+                <div class="pane-header">
+                    <h1>Symbol Cache</h1>
+                    <button id="btn-refresh-symbols" class="btn btn-primary">Force Refresh</button>
+                </div>
+                <div class="pane-body">
+                    <div class="card">
+                        <div class="card-header"><h3>Cache Status</h3><span id="symbols-status" class="badge">Checking...</span></div>
+                        <div class="card-body">
+                            <div class="info-row"><label>Last Updated:</label><span id="symbols-timestamp" class="mono">-</span></div>
+                            <div class="info-row"><label>Total Symbols:</label><span id="symbols-count" class="mono">-</span></div>
+                        </div>
+                    </div>
+                    <div class="card mt-4">
+                        <div class="card-header"><h3>Cached Symbols</h3></div>
+                        <div class="card-body"><div id="symbols-list" style="display:flex;flex-direction:column;gap:8px;"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Access Control Tab -->
+            <div id="authorization-management" class="tab-pane">
+                <div class="pane-header modern-pane-header">
+                    <div>
+                        <div class="pane-kicker">Permissions</div>
+                        <h1>Access Control</h1>
+                        <p class="pane-summary">Load enumerable roles automatically, verify whether the current user can manage them, and review or edit every member on-chain.</p>
+                    </div>
+                </div>
+                <div class="pane-body authorization-pane access-control-pane">
+                    <div class="card access-control-section">
+                        <h3>Current User & Role</h3>
+                        <p class="section-desc">After the contract address and role are both valid, the dashboard loads access-control data automatically, lists current members, and checks whether the active user can manage that role.</p>
+
+                        <div id="access-control-current-user-card" class="user-item active access-control-current-user-item">
+                            <div class="user-item-content">
+                                <div class="user-header">
+                                    <span id="grant-role-current-user" class="user-nickname">Select a user in Wallet & Accounts</span>
+                                    <span class="badge-active">Current User</span>
+                                </div>
+                                <div id="grant-role-current-user-short" class="user-address mono">No user selected</div>
+                                <div id="access-control-current-user-tags" class="user-tag-list"><span class="user-tag muted">access control</span></div>
+                            </div>
+                            <div class="user-item-actions">
+                                <button id="grant-role-current-user-copy" type="button" class="btn btn-sm btn-secondary" title="Copy current user">Copy</button>
+                            </div>
+                        </div>
+
+                        <div class="form-grid vertical-form compact-form access-control-simple-form">
+                            <div class="form-item">
+                                <label>Target Contract</label>
+                                <div class="search-select" data-search-select="grant-contract">
+                                    <input id="grant-role-contract" type="text" class="form-control mono search-select__input" placeholder="Search resolved contracts or paste an address" autocomplete="off">
+                                    <button type="button" class="search-select__toggle" data-search-select-toggle="grant-contract" aria-label="Toggle contract options">▾</button>
+                                    <div id="search-select-panel-grant-contract" class="search-select__panel" hidden>
+                                        <div id="search-select-list-grant-contract" class="search-select__list"></div>
+                                    </div>
+                                </div>
+                                <div id="grant-role-contract-meta" class="tool-field-meta"></div>
+                            </div>
+                            <div class="form-item">
+                                <label>Role</label>
+                                <div class="search-select" data-search-select="grant-role">
+                                    <input id="grant-role-bytes32" type="text" class="form-control mono search-select__input" placeholder="Search role name or paste bytes32" autocomplete="off">
+                                    <button type="button" class="search-select__toggle" data-search-select-toggle="grant-role" aria-label="Toggle role options">▾</button>
+                                    <div id="search-select-panel-grant-role" class="search-select__panel" hidden>
+                                        <div id="search-select-list-grant-role" class="search-select__list"></div>
+                                    </div>
+                                </div>
+                                <div id="grant-role-bytes32-meta" class="tool-field-meta"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card access-control-section">
+                        <h3>Role Summary & Members</h3>
+                        <p class="section-desc">Enumerable contracts expose every current member for the selected role.</p>
+
+                        <div class="access-control-summary-list">
+                            <div class="access-control-summary-row">
+                                <span class="access-control-summary-label">Role Exists</span>
+                                <span id="access-control-role-exists" class="access-control-summary-value">Not checked</span>
+                            </div>
+                            <div class="access-control-summary-row">
+                                <span class="access-control-summary-label">Current User Can Manage</span>
+                                <span id="access-control-user-can-manage" class="access-control-summary-value">Not checked</span>
+                            </div>
+                            <div class="access-control-summary-row">
+                                <span class="access-control-summary-label">Admin Role</span>
+                                <span id="access-control-admin-role" class="access-control-summary-value mono">-</span>
+                            </div>
+                            <div class="access-control-summary-row">
+                                <span class="access-control-summary-label">Admin User</span>
+                                <div class="access-control-summary-actions">
+                                    <span id="access-control-admin-user" class="access-control-summary-value">-</span>
+                                    <button id="btn-access-control-use-admin" type="button" class="btn btn-sm btn-secondary" hidden>Use Admin User</button>
+                                </div>
+                            </div>
+                            <div class="access-control-summary-row">
+                                <span class="access-control-summary-label">Members</span>
+                                <span id="access-control-member-count" class="access-control-summary-value">0</span>
+                            </div>
+                            <div class="access-control-summary-row access-control-summary-row--stacked">
+                                <span class="access-control-summary-label">Notes</span>
+                                <span id="access-control-role-note" class="access-control-summary-value access-control-summary-note">Waiting for a valid contract address and role.</span>
+                            </div>
+                        </div>
+
+                        <div id="access-control-members" class="access-control-members-list">
+                            <div class="placeholder">Select a contract and role to load members.</div>
+                        </div>
+                    </div>
+
+                    <div id="access-control-manage-card" class="card access-control-section" hidden>
+                        <h3>Manage Role</h3>
+                        <p class="section-desc">These actions only appear after confirming that the current user can operate the selected role.</p>
+                        <div class="form-grid vertical-form compact-form">
+                            <div class="form-item">
+                                <label>Add Member Address</label>
+                                <div class="search-select" data-search-select="grant-grantee">
+                                    <input id="grant-role-account" type="text" class="form-control mono search-select__input" placeholder="Search saved users or paste an address" autocomplete="off">
+                                    <button type="button" class="search-select__toggle" data-search-select-toggle="grant-grantee" aria-label="Toggle member options">▾</button>
+                                    <div id="search-select-panel-grant-grantee" class="search-select__panel" hidden>
+                                        <div id="search-select-list-grant-grantee" class="search-select__list"></div>
+                                    </div>
+                                </div>
+                                <div id="grant-role-account-meta" class="tool-field-meta"></div>
+                            </div>
+                            <div class="form-actions access-control-manage-actions">
+                                <button id="btn-access-control-add" class="btn btn-primary">Add Member</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Minter Tab -->
+            <div id="minter-v2" class="tab-pane">
+                <div class="pane-header modern-pane-header">
+                    <div>
+                        <div class="pane-kicker">Dev Tools</div>
+                        <h1>Minter</h1>
+                    </div>
+                </div>
+                <div class="pane-body modern-pane-body">
+                    <div class="tool-workbench">
+                        <section class="card feature-card tool-main-card minter-v2-card">
+                            <div class="section-heading-row">
+                                <div>
+                                    <h3>Balance Override</h3>
+                                </div>
+                            </div>
+                            <div class="tool-form-grid">
+                                <div class="tool-field tool-field--wide">
+                                    <label>Token Address</label>
+                                    <div class="search-select" data-search-select="minter-token">
+                                        <input id="minter-v2-token" type="text" class="form-control mono search-select__input" placeholder="Search cached symbols or paste an address" autocomplete="off">
+                                        <button type="button" class="search-select__toggle" data-search-select-toggle="minter-token" aria-label="Toggle token options">▾</button>
+                                        <div id="search-select-panel-minter-token" class="search-select__panel" hidden>
+                                            <div id="search-select-list-minter-token" class="search-select__list"></div>
+                                        </div>
+                                    </div>
+                                    <div id="minter-v2-token-meta" class="tool-field-meta"></div>
+                                </div>
+                                <div class="tool-field tool-field--wide">
+                                    <label>Receiver Address</label>
+                                    <div class="search-select" data-search-select="minter-receiver">
+                                        <input id="minter-v2-receiver" type="text" class="form-control mono search-select__input" placeholder="Search saved users or paste an address" autocomplete="off">
+                                        <button type="button" class="search-select__toggle" data-search-select-toggle="minter-receiver" aria-label="Toggle receiver options">▾</button>
+                                        <div id="search-select-panel-minter-receiver" class="search-select__panel" hidden>
+                                            <div id="search-select-list-minter-receiver" class="search-select__list"></div>
+                                        </div>
+                                    </div>
+                                    <div id="minter-v2-receiver-meta" class="tool-field-meta"></div>
+                                </div>
+                                <div class="tool-field">
+                                    <label>Amount</label>
+                                    <input id="minter-v2-amount" type="text" class="form-control" placeholder="1.0 = 1 token">
+                                </div>
+                            </div>
+                            <div class="form-actions minter-v2-actions">
+                                <button id="btn-minter-v2-execute" class="btn btn-primary">Set Balance</button>
+                            </div>
+                        </section>
+                    </div>
+
+                    <section class="card feature-card minter-v2-analysis-card">
+                        <div class="section-heading-row">
+                            <div>
+                                <h3>Analysis Result</h3>
+                            </div>
+                        </div>
+                        <div id="minter-v2-analysis" class="minter-v2-analysis">
+                            <div class="placeholder">No analysis yet</div>
+                        </div>
+                    </section>
+
+                    <!--
+                      IMPORTANT: this is intentionally NOT a generic transfer tool.
+                      It exists only to force MetaMask to refresh native ETH balance display after
+                      local hardhat/anvil style balance overrides. Keep the sender implicit
+                      (current user), keep the receiver equal to the same current user, and keep
+                      the runtime restricted to impersonation on local test RPCs.
+                    -->
+                    <section class="card feature-card minter-v2-refresh-card">
+                        <div class="section-heading-row">
+                            <div>
+                                <h3>MetaMask Native Balance Refresh</h3>
+                                <p class="section-desc">Sends one tiny native-token self-transfer from the current user through RPC impersonation only. This exists solely to make MetaMask notice a direct ETH balance override on local test nodes.</p>
+                            </div>
+                        </div>
+                        <div id="minter-v2-native-refresh-note" class="tool-note-box"></div>
+                        <div class="form-actions minter-v2-actions minter-v2-refresh-actions">
+                            <button id="btn-minter-v2-refresh-native" class="btn btn-secondary">Send Native Refresh Tx</button>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div style="display:none;">
+                <span id="current-block-time"></span>
+                <span id="current-block-number"></span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

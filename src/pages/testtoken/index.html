@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Tokens</title>
+  <link rel="icon" href="data:," />
+
+  <script>var toHome = "../../../";</script>
+
+  <!-- ABI dependencies -->
+  <script src="../../../abigen/erc20Metadata/erc20Metadata.js"></script>
+  <script src="../../../abigen/stapleController/stapleController.js"></script>
+  <script src="../../../abigen/stapleRedstoneExtractor/stapleRedstoneExtractor.js"></script>
+  <script src="../../../abigen/stapleOracleVerifierExtensions/stapleOracleVerifierExtensions.js"></script>
+  <script src="../../../abigen/staplePriceProvider/staplePriceProvider.js"></script>
+  <script src="../../../abigen/stapleTestERC20Factory/stapleTestERC20Factory.js"></script>
+  <script src="../../../abigen/stapleUIPoolDataProvider/stapleUIPoolDataProvider.js"></script>
+
+  <!-- Common libraries -->
+  <script src="../../lib/common.js?v=20260521r"></script>
+  <script src="../../lib/rpcManager.js"></script>
+  <script src="../../lib/contractCalls.js"></script>
+  <script src="../../lib/chainlinkStream.js"></script>
+
+  <!-- Navbar -->
+  <script src="../../components/navbar/navbar.js" defer></script>
+  <link rel="stylesheet" href="../../components/navbar/navbar.css">
+
+  <!-- Third-party -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.8.0/dist/ethers.umd.min.js"></script>
+
+  <!-- Business scripts -->
+  <script src="../environment/environment.js?v=20260521r" defer></script>
+  <script src="./testtoken.display.js" defer></script>
+  <script src="./testtoken.create.js" defer></script>
+  <script src="./testtoken.verify.js" defer></script>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="./testtoken.css">
+</head>
+<body>
+    <div class="tt-page">
+        <div class="tt-header">
+            <h1>Test Tokens</h1>
+            <p class="header-desc">Manage test tokens for development and testing</p>
+        </div>
+
+        <!-- Action Cards -->
+        <div class="action-cards">
+            <!-- ETH Card -->
+            <div class="action-card">
+                <div class="card-icon">💰</div>
+                <h3>ETH Balance</h3>
+                <div class="eth-balance" id="eth-display">-</div>
+                <button id="btn-set-eth" class="btn-primary">Mint ETH</button>
+            </div>
+
+            <!-- Batch Mint Card -->
+            <div class="action-card">
+                <div class="card-icon">🪙</div>
+                <h3>Batch Operations</h3>
+                <div class="card-actions">
+                    <button id="btn-mint-all" class="btn-primary">Mint All Tokens</button>
+                    <button id="btn-refresh" class="btn-secondary">Refresh Balances</button>
+                </div>
+            </div>
+
+            <!-- Price Verification Card -->
+            <div class="action-card">
+                <div class="card-icon">✅</div>
+                <h3>Price Verification</h3>
+                <p class="card-desc">Verify prices after updating</p>
+                <div class="card-actions">
+                    <button id="btn-verify" class="btn-primary">Verify All Prices</button>
+                    <button id="btn-decode-verify" class="btn-secondary">Decode Verify Data</button>
+                </div>
+            </div>
+
+            <!-- Create Token Card -->
+            <div class="action-card clickable" id="btn-create-token-card">
+                <div class="card-icon">➕</div>
+                <h3>Create New Token</h3>
+                <p class="card-desc">Deploy a new test token</p>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="instructions">
+            <div class="instruction-item">
+                <span class="step-number">1</span>
+                <span>Set user address in Environment page</span>
+            </div>
+            <div class="instruction-item">
+                <span class="step-number">2</span>
+                <span>Mint ETH first (required for transactions)</span>
+            </div>
+            <div class="instruction-item">
+                <span class="step-number">3</span>
+                <span>Mint test tokens using "Mint All Tokens"</span>
+            </div>
+            <div class="instruction-item">
+                <span class="step-number">4</span>
+                <span>Update prices if using STAPLE mode, then verify</span>
+            </div>
+        </div>
+
+        <!-- Tokens Table -->
+        <div class="tokens-section">
+            <div class="section-header">
+                <h2>Token List</h2>
+            </div>
+            <div id="tokens-table-container">
+                <table class="tokens-table">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Address</th>
+                            <th>Balance</th>
+                            <th>Price (USD)</th>
+                            <th>Oracle Type</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tokens-tbody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Token Modal -->
+    <div id="create-token-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Test Token</h3>
+                <button class="modal-close" id="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Use Existing Token Address</label>
+                    <input type="text" id="input-existing-token" placeholder="0x...">
+                    <p class="form-hint">Leave empty to deploy a new token</p>
+                </div>
+
+                <div class="form-divider">OR</div>
+
+                <div class="form-group">
+                    <label>Token Symbol</label>
+                    <input type="text" id="input-symbol" placeholder="e.g., USDT">
+                </div>
+
+                <div class="form-group">
+                    <label>Decimals</label>
+                    <input type="number" id="input-decimals" value="18" min="1" max="18">
+                </div>
+
+                <div class="form-group">
+                    <label>Oracle Type</label>
+                    <select id="input-oracle-type">
+                        <option value="NOT_DECIDED">NOT DECIDED</option>
+                        <option value="STAPLE">STAPLE</option>
+                        <option value="CHAINLINK_DATA_FEED">CHAINLINK DATA FEED</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="group-chainlink-feed">
+                    <label>Chainlink Data Feed</label>
+                    <input type="text" id="input-chainlink-feed" placeholder="0x..." disabled>
+                </div>
+
+                <div class="form-group" id="group-initial-price">
+                    <label>Initial Price (USD)</label>
+                    <input type="number" id="input-initial-price" value="1" step="0.01" disabled>
+                </div>
+
+                <div class="form-group" id="group-stream-id">
+                    <label>Stream/Pull ID</label>
+                    <input type="text" id="input-stream-id" placeholder="0x{64 hex}" disabled>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-deploy-token" class="btn-primary">Deploy Token</button>
+                <button class="btn-secondary modal-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Toast -->
+    <div id="success-toast" class="toast"></div>
+
+    <!-- Decode Verify Data Modal -->
+    <div id="decode-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Decode Verify Data</h3>
+                <button class="modal-close" id="decode-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Encoded Verify Data (hex)</label>
+                    <textarea id="decode-input" rows="6" placeholder="Paste encoded verify data here (0x...)"></textarea>
+                </div>
+                <button id="btn-do-decode" class="btn-primary">Decode</button>
+                
+                <div id="decode-results" style="display: none;">
+                    <div class="decode-section">
+                        <h4>1. Decoded Structure (JSON)</h4>
+                        <pre id="decode-json"></pre>
+                    </div>
+                    <div class="decode-section">
+                        <h4>2. Detailed Explanation</h4>
+                        <div id="decode-explanation"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Modal auto-close setup - wrapped in DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const modal = document.getElementById('create-token-modal');
+            const modalCloseBtn = document.getElementById('modal-close-btn');
+            const modalCancelBtns = document.querySelectorAll('.modal-cancel');
+            const createTokenCard = document.getElementById('btn-create-token-card');
+            
+            if (createTokenCard && modal) {
+                createTokenCard.addEventListener('click', () => {
+                    modal.classList.add('show');
+                });
+            }
+
+            const closeModal = () => {
+                if (modal) modal.classList.remove('show');
+            };
+
+            modalCloseBtn?.addEventListener('click', closeModal);
+            modalCancelBtns.forEach(btn => btn.addEventListener('click', closeModal));
+
+            // Close on outside click
+            modal?.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
+        });
+
+        // Toast notification helper
+        window.showToast = function(message, duration = 3000) {
+            if (window.stapleCommon?.showToast) {
+                window.stapleCommon.showToast(message, { type: 'success', duration, autoClose: true });
+                return;
+            }
+        };
+
+        window.showErrorToast = function(message) {
+            if (window.stapleCommon?.showErrorToast) {
+                window.stapleCommon.showErrorToast(message, { autoClose: false });
+            }
+        };
+
+        // Oracle type change handler
+        document.getElementById('input-oracle-type')?.addEventListener('change', function(e) {
+            const value = e.target.value;
+            const chainlinkFeed = document.getElementById('group-chainlink-feed');
+            const initialPrice = document.getElementById('group-initial-price');
+            const streamId = document.getElementById('group-stream-id');
+            const feedInput = document.getElementById('input-chainlink-feed');
+            const priceInput = document.getElementById('input-initial-price');
+            const streamInput = document.getElementById('input-stream-id');
+
+            // Reset all to disabled
+            [feedInput, priceInput, streamInput].forEach(el => el.disabled = true);
+            [chainlinkFeed, initialPrice, streamId].forEach(el => el.style.display = 'none');
+
+            if (value === 'STAPLE') {
+                initialPrice.style.display = 'block';
+                priceInput.disabled = false;
+            } else if (value === 'CHAINLINK_DATA_FEED') {
+                chainlinkFeed.style.display = 'block';
+                feedInput.disabled = false;
+            }
+        });
+
+        // Decode Verify Data Modal
+        document.addEventListener('DOMContentLoaded', () => {
+            const decodeModal = document.getElementById('decode-modal');
+            const decodeBtn = document.getElementById('btn-decode-verify');
+            const decodeCloseBtn = document.getElementById('decode-modal-close');
+            const doDecodeBtn = document.getElementById('btn-do-decode');
+            const decodeInput = document.getElementById('decode-input');
+            const decodeResults = document.getElementById('decode-results');
+            const decodeJson = document.getElementById('decode-json');
+            const decodeExplanation = document.getElementById('decode-explanation');
+
+            // Open decode modal
+            decodeBtn?.addEventListener('click', () => {
+                decodeModal?.classList.add('show');
+                decodeResults.style.display = 'none';
+                decodeInput.value = '';
+            });
+
+            // Close decode modal
+            decodeCloseBtn?.addEventListener('click', () => {
+                decodeModal?.classList.remove('show');
+            });
+
+            decodeModal?.addEventListener('click', (e) => {
+                if (e.target === decodeModal) decodeModal.classList.remove('show');
+            });
+
+            // Do decode
+            doDecodeBtn?.addEventListener('click', async () => {
+                const inputData = decodeInput.value.trim();
+                if (!inputData) {
+                    alert('Please enter encoded data');
+                    return;
+                }
+
+                doDecodeBtn.disabled = true;
+                doDecodeBtn.textContent = 'Decoding...';
+
+                try {
+                    const { json, explanation } = await window.decodeVerifyData(inputData);
+                    
+                    // Display JSON
+                    decodeJson.textContent = JSON.stringify(json, (key, value) => {
+                        // Convert BigNumber-like objects to strings
+                        if (value && value._isBigNumber) return value.toString();
+                        return value;
+                    }, 2);
+
+                    // Display Explanation
+                    decodeExplanation.innerHTML = renderExplanation(explanation);
+
+                    decodeResults.style.display = 'block';
+                } catch (e) {
+                    alert('Decode failed: ' + e.message);
+                    console.error('[Decode] Error:', e);
+                } finally {
+                    doDecodeBtn.disabled = false;
+                    doDecodeBtn.textContent = 'Decode';
+                }
+            });
+
+            function renderExplanation(explanation) {
+                if (!explanation || explanation.length === 0) {
+                    return '<p>No data to display</p>';
+                }
+
+                return explanation.map((group, idx) => {
+                    const badgeClass = getBadgeClass(group.oracleType);
+                    
+                    let assetsHtml = group.assets.map((a, i) => {
+                        const baseToken = group.baseTokens[i];
+                        return `
+                            <div class="asset-item">
+                                <span class="asset-symbol">${a.symbol}</span>
+                                <span class="asset-address">${a.address}</span>
+                                <span class="base-token">/ ${baseToken.symbol}</span>
+                            </div>
+                        `;
+                    }).join('');
+
+                    let bytesHtml = '';
+                    if (group.bytesData && group.bytesData !== '0x' && group.bytesData.length > 2) {
+                        bytesHtml = `
+                            <div class="bytes-data">
+                                <div class="bytes-data-label">Additional Data (${group.bytesData.length} chars)</div>
+                                <div class="bytes-data-content">${group.bytesData.length > 200 ? group.bytesData.slice(0, 200) + '...' : group.bytesData}</div>
+                                ${group.decodedBytes ? `
+                                    <div class="bytes-decoded">
+                                        <div class="bytes-decoded-label">${group.decodedBytes.description || 'Decoded'}</div>
+                                        <div class="bytes-decoded-content">${formatDecodedBytes(group.decodedBytes)}</div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }
+
+                    return `
+                        <div class="verifier-group">
+                            <div class="verifier-header">
+                                <span class="verifier-type-badge ${badgeClass}">${group.oracleType}</span>
+                                <span class="verifier-address">${group.verifier}</span>
+                            </div>
+                            <div style="font-size: 12px; color: #666; margin-bottom: 12px;">
+                                ${group.oracleTypeDescription}
+                            </div>
+                            <div class="asset-list">
+                                <strong style="font-size: 12px; color: #333;">Assets (${group.assets.length}):</strong>
+                                ${assetsHtml}
+                            </div>
+                            ${bytesHtml}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            function getBadgeClass(oracleType) {
+                if (oracleType === 'STAPLE_v1') return 'staple';
+                if (oracleType === 'CHAINLINK_DATA_FEED_v1') return 'chainlink-feed';
+                if (oracleType === 'CHAINLINK_STREAM_v1') return 'chainlink-stream';
+                if (oracleType === 'REDSTONE_v1') return 'redstone';
+                return 'unknown';
+            }
+
+            function formatDecodedBytes(decoded) {
+                if (!decoded) return '';
+                if (decoded.type === 'bytes[]' && decoded.reports) {
+                    return `${decoded.count} report(s)`;
+                }
+                if (decoded.count !== undefined) {
+                    return `Count: ${decoded.count}`;
+                }
+                if (decoded.length !== undefined) {
+                    return `Length: ${decoded.length} bytes`;
+                }
+                return decoded.type || '';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JR Pricing</title>
+
+  <script>var toHome = "../../../";</script>
+
+  <script src="../../../abigen/erc20Metadata/erc20Metadata.js"></script>
+  <script src="../../../abigen/jrPricingFactory/jrPricingFactory.js"></script>
+  <script src="../../../abigen/jrPricingOracle/jrPricingOracle.js"></script>
+
+  <script src="../../lib/common.js?v=20260521r"></script>
+  <script src="../../lib/rpcManager.js"></script>
+  <script src="../../components/navbar/navbar.js" defer></script>
+  <link rel="stylesheet" href="../../components/navbar/navbar.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.8.0/dist/ethers.umd.min.js"></script>
+  <script src="../environment/environment.js?v=20260521r" defer></script>
+  <script src="./jr-pricing.js" defer></script>
+
+  <link rel="stylesheet" href="./jr-pricing.css">
+</head>
+<body>
+  <div class="jr-page">
+    <div class="jr-header">
+      <div>
+        <h1>JR Pricing</h1>
+        <p class="header-desc">Factory comes from Environment settings. JR spot is the live preview NAV from Bondify <code>previewPrice</code>, while market adjustment only affects the final exit price as an additive spot-based adjustment. Use the token list tab for per-token controls and the oracle management tab for pair-level creation and JR registration.</p>
+      </div>
+      <div class="header-actions">
+        <button id="btn-refresh" class="btn-primary">Refresh</button>
+      </div>
+    </div>
+
+    <div id="jr-status" class="status-banner info">Ready</div>
+
+    <div class="tab-strip">
+      <button class="tab-button active" data-tab="token-list">Current Token List</button>
+      <button class="tab-button" data-tab="oracle-management">Oracle Management</button>
+    </div>
+
+    <section id="tab-token-list" class="page-section">
+      <div class="tokens-section">
+        <div class="section-header">
+          <div>
+            <h2>JR Token List</h2>
+            <p class="section-subtitle">Address and symbol are grouped together. Per-token pricing parameters can still be edited from this list.</p>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="jr-table">
+            <thead>
+              <tr>
+                <th>JR Token</th>
+                <th>Linked Contracts</th>
+                <th>Prices</th>
+                <th>JR Token Config</th>
+                <th>Oracle Rates</th>
+                <th>Non-Flash Params</th>
+              </tr>
+            </thead>
+            <tbody id="jr-tbody">
+              <tr><td colspan="6" class="placeholder">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-oracle-management" class="page-section hidden">
+      <div class="tokens-section">
+        <div class="section-header">
+          <div>
+            <h2>Oracle Management</h2>
+            <p class="section-subtitle">Manage pair-level oracles and register new JR tokens under an existing oracle. Oracle rows are derived from the current factory registry and progressively rendered.</p>
+          </div>
+          <div class="section-actions">
+            <button id="btn-create-oracle" class="btn-secondary">Create Oracle</button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="jr-table oracle-table">
+            <thead>
+              <tr>
+                <th>Oracle</th>
+                <th>Pair</th>
+                <th>Non-Flash Params</th>
+                <th>Managed Tokens</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="oracle-tbody">
+              <tr><td colspan="5" class="placeholder">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="edit-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="edit-modal-title">Edit</h3>
+        <button class="modal-close" id="edit-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="edit-modal-body"></div>
+      <div class="modal-footer">
+        <button id="edit-modal-submit" class="btn-primary">Submit</button>
+        <button id="edit-modal-cancel" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

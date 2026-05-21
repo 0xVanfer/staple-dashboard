@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arbitrage</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.0/dist/ethers.umd.min.js"></script>
+    <script src="../../../abigen/stapleRedstoneExtractor/stapleRedstoneExtractor.js"></script>
+    <script src="../../../abigen/stapleOracleVerifierExtensions/stapleOracleVerifierExtensions.js"></script>
+    <script src="../../../abigen/staplePriceProvider/staplePriceProvider.js"></script>
+    <script src="../../../abigen/stapleTestERC20Factory/stapleTestERC20Factory.js"></script>
+    <script src="../../../abigen/stapleRouter/stapleRouter.js"></script>
+    <script src="../../../abigen/erc20Metadata/erc20Metadata.js"></script>
+    <script src="../../../abigen/stapleUIPoolDataProvider/stapleUIPoolDataProvider.js"></script>
+    <script src="../../../abigen/stapleController/stapleController.js"></script>
+    <script src="../../../abigen/staplePoolBasic/staplePoolBasic.js"></script>
+    <script src="../../../abigen/mockExternalDexExtentions/mockExternalDexExtentions.js"></script>
+    <script src="../../lib/common.js?v=20260521r"></script>
+    <script src="../../lib/rpcManager.js"></script>
+    <script src="../../lib/contractCalls.js"></script>
+    <script src="../environment/environment.js?v=20260521r"></script>
+    <script src="../swap/swap.graph.js"></script>
+    <script src="../testtoken/testtoken.verify.js" defer></script>
+    <script>var toHome = "../../../";</script>
+    <script src="../../components/navbar/navbar.js" defer></script>
+    <link rel="stylesheet" href="../../components/navbar/navbar.css">
+    <link rel="stylesheet" href="arbitrage.css">
+</head>
+<body>
+    <div class="arbitrage-page">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>External Arbitrage</h3>
+                <div class="nav-item active" data-target="mock-curve">Mock Curve</div>
+                <div class="nav-item" data-target="mock-univ2">Mock Uniswap V2</div>
+                <div class="nav-item" data-target="mock-univ3">Mock Uniswap V3</div>
+                <div class="nav-item" data-target="mock-aggregator">Aggregator</div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Internal Arbitrage</h3>
+                <div class="nav-item" data-target="internal">Internal</div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div id="mock-curve" class="content-panel active">
+                <h2>Mock Curve Configuration</h2>
+                
+                <div class="panel-split-container">
+                    <div class="current-state-panel card-style">
+                        <h3 class="panel-title">Current State</h3>
+                        <div class="state-grid">
+                            <div class="state-item">
+                                <span class="label" id="curve-curr-bal-a-label">Balance A</span>
+                                <span id="curve-curr-bal-a" class="value">--</span>
+                            </div>
+                            <div class="state-item">
+                                <span class="label" id="curve-curr-bal-b-label">Balance B</span>
+                                <span id="curve-curr-bal-b" class="value">--</span>
+                            </div>
+                            <div class="state-item">
+                                <span class="label">Amplification (A)</span>
+                                <span id="curve-curr-a" class="value">--</span>
+                            </div>
+                            <div class="state-item">
+                                <span class="label">Fee</span>
+                                <span id="curve-curr-fee" class="value">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="config-form card-style">
+                        <h3 class="panel-title">Update Configuration</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label id="curve-bal-a-label">Balance A</label>
+                                <input type="text" id="curve-balance-a" placeholder="1000.0">
+                            </div>
+                            <div class="form-group">
+                                <label id="curve-bal-b-label">Balance B</label>
+                                <input type="text" id="curve-balance-b" placeholder="1000.0">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Amplification (A)</label>
+                                <input type="text" id="curve-a" placeholder="100">
+                            </div>
+                            <div class="form-group">
+                                <label>Fee (%)</label>
+                                <input type="text" id="curve-fee" placeholder="0.3">
+                            </div>
+                        </div>
+                        <button id="btn-update-curve" class="btn-primary">Update Curve Pool</button>
+                    </div>
+                </div>
+            </div>
+            <div id="mock-univ2" class="content-panel">
+                <h2>Mock Uniswap V2 Configuration</h2>
+
+                <div class="panel-split-container">
+                    <div class="current-state-panel card-style">
+                        <h3 class="panel-title">Current State</h3>
+                        <div class="state-grid">
+                            <div class="state-item">
+                                <span class="label" id="univ2-curr-res-a-label">Reserve A</span>
+                                <span id="univ2-curr-res-a" class="value">--</span>
+                            </div>
+                            <div class="state-item">
+                                <span class="label" id="univ2-curr-res-b-label">Reserve B</span>
+                                <span id="univ2-curr-res-b" class="value">--</span>
+                            </div>
+                            <div class="state-item">
+                                <span class="label">Fee Rate</span>
+                                <span id="univ2-curr-fee" class="value">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="config-form card-style">
+                        <h3 class="panel-title">Update Configuration</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label id="univ2-res-a-label">Reserve A</label>
+                                <input type="text" id="univ2-reserve-a" placeholder="1000.0">
+                            </div>
+                            <div class="form-group">
+                                <label id="univ2-res-b-label">Reserve B</label>
+                                <input type="text" id="univ2-reserve-b" placeholder="1000.0">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Fee Rate (%)</label>
+                            <input type="text" id="univ2-fee" placeholder="0.3">
+                        </div>
+                        <button id="btn-update-univ2" class="btn-primary">Update V2 Pair</button>
+                    </div>
+                </div>
+            </div>
+            <div id="mock-univ3" class="content-panel">
+                <h2>Mock Uniswap V3 Configuration</h2>
+
+                <div class="panel-split-container">
+                    <div class="current-state-panel card-style">
+                        <h3 class="panel-title">Current State</h3>
+                        <div class="state-grid">
+                            <div class="state-item">
+                                <span class="label">Fee</span>
+                                <span id="univ3-curr-fee" class="value">--</span>
+                            </div>
+                            <div class="state-item full-width">
+                                <span class="label">Liquidity Distribution</span>
+                                <div id="univ3-chart-container" style="width: 100%; height: 200px; margin-top: 10px; background: #f9fafb; border-radius: 4px; position: relative;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="config-form card-style">
+                        <h3 class="panel-title">Update Configuration</h3>
+                        <div class="form-group">
+                            <label>Fee (%)</label>
+                            <input type="text" id="univ3-fee" placeholder="0.05">
+                        </div>
+                        
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                <label>Liquidity Pillars</label>
+                                <span style="font-size: 12px; color: #666;">(Price must be decreasing)</span>
+                            </div>
+                            
+                            <!-- Headers -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 30px; gap: 5px; margin-bottom: 5px; font-size: 12px; font-weight: bold; color: #555;">
+                                <div>Price</div>
+                                <div id="univ3-header-amt0">Amt A</div>
+                                <div id="univ3-header-amt1">Amt B</div>
+                                <div></div>
+                            </div>
+
+                            <div id="univ3-pillars-container" style="display: flex; flex-direction: column; gap: 5px;">
+                                <!-- Dynamic Rows -->
+                            </div>
+                            
+                            <button id="btn-add-pillar" class="btn-secondary" style="margin-top: 10px; width: 100%; padding: 5px;">+ Add Pillar</button>
+                        </div>
+
+                        <button id="btn-update-univ3" class="btn-primary" style="margin-top: 15px;">Update V3 Pool</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mock-aggregator" class="content-panel">
+                <h2>Aggregator Configuration</h2>
+                <div class="config-form card-style">
+                    <p>The Aggregator automatically routes trades to the best underlying DEX (Curve, UniV2, or UniV3).</p>
+                    <p>Please configure the individual DEXes using the tabs on the left.</p>
+                </div>
+            </div>
+
+            <div id="internal" class="content-panel">
+                <h2>Internal Arbitrage</h2>
+                <p>Find cyclic arbitrage opportunities within the Staple protocol (e.g. A -> B -> C -> A).</p>
+                
+                <div class="internal-container" style="display: flex; gap: 20px; align-items: flex-start;">
+                    <!-- Left Column: Input & Results -->
+                    <div class="internal-left" style="flex: 1;">
+                        <div class="config-form card-style">
+                             <div class="form-group">
+                                <label>Arbitrage Asset</label>
+                                <select id="internal-token-select" class="token-select-styled" style="width: 100%;"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Amount In</label>
+                                <input type="text" id="internal-amount-in" placeholder="1.0">
+                            </div>
+                            <button id="btn-calc-internal" class="btn-primary">Check Opportunities</button>
+                        </div>
+                        
+                        <div id="internal-results" style="margin-top: 20px; display: none;">
+                            <h3>Results</h3>
+                            <div class="results-area card-style">
+                                <div class="result-item">
+                                    <span>Best Path:</span>
+                                    <span id="internal-best-path">--</span>
+                                </div>
+                                <div class="result-item">
+                                    <span>Amount Out:</span>
+                                    <span id="internal-amount-out">--</span>
+                                </div>
+                                <div class="result-item highlight">
+                                    <span>Profit:</span>
+                                    <span id="internal-profit">--</span>
+                                </div>
+                            </div>
+                            <button id="btn-execute-internal" class="btn-primary" style="margin-top: 10px; width: 100%;" disabled>Execute Internal Arbitrage</button>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Path Visualization -->
+                    <div class="internal-right" style="flex: 1;">
+                         <div class="card-style" style="height: 100%; min-height: 300px;">
+                            <h3 class="panel-title">Path Execution Details</h3>
+                            <div id="internal-path-details" style="font-family: monospace; font-size: 12px; color: var(--text-secondary); white-space: pre-wrap;">
+                                Select an asset and calculate to see path details.
+                            </div>
+                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="external-results-panel">
+                <h2>External Arbitrage Results</h2>
+                <div class="results-area card-style">
+                    <div class="result-item">
+                        <span id="staple-label">Staple (A -> B):</span>
+                        <span id="staple-out-val">--</span>
+                    </div>
+                    <div class="result-item">
+                        <span id="external-label">External (B -> A):</span>
+                        <span id="external-out-val">--</span>
+                    </div>
+                    <div class="result-item highlight">
+                        <span id="profit-label">Profit (Token A):</span>
+                        <span id="profit-val">--</span>
+                    </div>
+                    <div class="result-item">
+                        <span>Profit Ratio (bps):</span>
+                        <span id="profit-ratio-val">--</span>
+                    </div>
+                    <div class="result-item">
+                        <span id="arb-status" style="font-size: 12px; color: #666;"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-panel" id="external-arb-panel">
+            <h3>External Arbitrage Execution</h3>
+            
+            <!-- Token A (In) -->
+            <div class="token-input-container">
+                <div class="token-input-header">
+                    <label>Token A (In)</label>
+                </div>
+                <div class="token-input">
+                    <input type="text" id="amount-in" placeholder="1.0" inputmode="decimal">
+                    <select id="token-a-select" class="token-select-styled"></select>
+                </div>
+            </div>
+
+            <!-- Swap Direction Button -->
+            <div class="swap-direction">
+                <button class="swap-direction-btn" id="swap-tokens-btn" title="Switch tokens">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M12 5L8 1M8 1L4 5M8 1V11M4 11L8 15M8 15L12 11M8 15V5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Token B (Out) -->
+            <div class="token-input-container">
+                <div class="token-input-header">
+                    <label>Token B (Out)</label>
+                </div>
+                <div class="token-input">
+                    <input type="text" id="amount-out-est" placeholder="0.0" readonly style="background:#f9fafb;">
+                    <select id="token-b-select" class="token-select-styled"></select>
+                </div>
+            </div>
+
+            <button id="execute-arb-btn" class="btn-primary" disabled>Execute Arbitrage</button>
+            
+            <div class="global-settings card-style" style="margin-top: 20px;">
+                <h3 class="panel-title">Global Settings</h3>
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                    <input type="checkbox" id="global-update-state" style="width: 18px; height: 18px; cursor: pointer;">
+                    <label for="global-update-state" style="margin: 0; font-weight: 500; cursor: pointer; color: var(--text);">Update External DEX State</label>
+                </div>
+                <p style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);">
+                    If checked, the external DEX state (reserves/balances) will be updated on-chain after the arbitrage execution.
+                </p>
+            </div>
+        </div>
+    </div>
+    <script src="arbitrage-utils.js"></script>
+    <script src="arbitrage-ui.js"></script>
+    <script src="arbitrage-service.js"></script>
+    <script src="arbitrage.js"></script>
+</body>
+</html>

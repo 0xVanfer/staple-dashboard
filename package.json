@@ -1,0 +1,16 @@
+{
+    "name": "staple-dashboard",
+    "private": true,
+    "version": "1.0.0",
+    "description": "Production-oriented static Staple dashboard with wallet-backed browser flows.",
+    "scripts": {
+        "start:local": "sh -c 'python3 -m http.server ${PORT:-8787}'",
+        "test:e2e": "playwright test",
+        "test:e2e:prod-smoke": "playwright test tests/e2e/prod-smoke.spec.js",
+        "test:e2e:mainnet-fork": "playwright test tests/e2e/mainnet-fork.spec.js",
+        "test:e2e:sepolia": "playwright test tests/e2e/sepolia.spec.js"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.54.2"
+    }
+}
