@@ -25,7 +25,7 @@ test.describe('dashboard · sepolia profile', () => {
     await expect(page.locator('#override-panel')).toContainText(testSupport.addressProvider);
   });
 
-  test('default state keeps fixed Bondify and Jr Pricing while rpc switching stays consistent', async ({ page }) => {
+  test('default state keeps manual Bondify and Jr Pricing configuration while rpc switching stays consistent', async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
     await page.goto('/src/pages/environment/index.html');
 
@@ -49,13 +49,13 @@ test.describe('dashboard · sepolia profile', () => {
     await expect(page.locator('#current-block-info')).toContainText('Ethereum PublicNode');
   });
 
-  test('jr pricing page reports fixed deployment unavailable on sepolia profile', async ({ page }) => {
+  test('jr pricing page reports missing manual configuration on sepolia profile', async ({ page }) => {
     await seedProfile(page, 1);
     await page.goto('/src/pages/jr-pricing/index.html');
 
-    await expect(page.locator('#jr-status')).toContainText('JR Pricing fixed deployment is not available on the current RPC');
-    await expect(page.locator('#jr-tbody')).toContainText('JR Pricing fixed deployment is not available on the current RPC');
-    await expect(page.locator('#oracle-tbody')).toContainText('JR Pricing fixed deployment is not available on the current RPC');
+    await expect(page.locator('#jr-status')).toContainText('JR Pricing factory is not configured for the current environment');
+    await expect(page.locator('#jr-tbody')).toContainText('JR Pricing factory is not configured for the current environment');
+    await expect(page.locator('#oracle-tbody')).toContainText('JR Pricing factory is not configured for the current environment');
     await expect(page.locator('#btn-create-oracle')).toBeDisabled();
   });
 

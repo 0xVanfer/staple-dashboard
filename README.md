@@ -64,7 +64,7 @@ Whether a page is actually usable depends on the current RPC, Address Provider, 
 
 - **RPC** only determines where requests are sent
 - **Staple addresses** are resolved from the saved `Version / Address Provider`
-- **Bondify / JR Pricing** are still read from fixed frontend address entry points
+- **Bondify / JR Pricing** use manual per-environment addresses managed from the Environment page
 - The dashboard must continue working even when production environments do not expose a `Test Token Factory`
 
 ## Wallets and Signing

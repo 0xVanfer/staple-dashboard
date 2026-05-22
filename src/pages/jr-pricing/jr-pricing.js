@@ -537,7 +537,7 @@
       const disabled = !hasJrPricing || !hasBondify;
       createOracleBtn.disabled = disabled;
       createOracleBtn.title = disabled
-        ? (!hasJrPricing ? 'JR Pricing fixed deployment is not available on the current RPC' : 'Bondify fixed principal converters are not fully available on the current RPC')
+        ? (!hasJrPricing ? 'JR Pricing factory is not configured for the current environment' : 'Bondify principal converters are not fully configured for the current environment')
         : '';
     }
   }
@@ -939,9 +939,9 @@
         state.oracles = [];
         renderRows(state.rows);
         renderOracleRows(state.oracles);
-        setTableLoading('JR Pricing fixed factory address is missing');
-        setOracleLoading('JR Pricing fixed factory address is missing');
-        setStatus('JR Pricing fixed factory address is missing', 'info');
+        setTableLoading('JR Pricing factory address is missing from the current environment configuration');
+        setOracleLoading('JR Pricing factory address is missing from the current environment configuration');
+        setStatus('JR Pricing factory address is missing from the current environment configuration', 'info');
         return;
       }
 
@@ -951,13 +951,13 @@
         state.oracles = [];
         renderRows(state.rows);
         renderOracleRows(state.oracles);
-        setTableLoading('JR Pricing fixed deployment is not available on the current RPC');
-        setOracleLoading('JR Pricing fixed deployment is not available on the current RPC');
-        setStatus('JR Pricing fixed deployment is not available on the current RPC', 'info');
+        setTableLoading('JR Pricing factory is not configured for the current environment');
+        setOracleLoading('JR Pricing factory is not configured for the current environment');
+        setStatus('JR Pricing factory is not configured for the current environment', 'info');
         const createOracleBtn = document.getElementById('btn-create-oracle');
         if (createOracleBtn) {
           createOracleBtn.disabled = true;
-          createOracleBtn.title = 'JR Pricing fixed deployment is not available on the current RPC';
+          createOracleBtn.title = 'JR Pricing factory is not configured for the current environment';
         }
         return;
       }
@@ -1182,7 +1182,7 @@
           <div class="modal-form-item full-width">
             <label>Bondify Source Registry</label>
             <input type="text" value="PCS + Aave + Morpho fixed front-end addresses" disabled>
-            <p class="modal-hint">This action uses the three Bondify principal converter addresses hardcoded in the front-end.</p>
+            <p class="modal-hint">This action uses the three Bondify principal converter addresses configured on the Environment page.</p>
           </div>
           <div class="modal-form-item">
             <label>Wait Time (days)</label>
@@ -1348,13 +1348,13 @@
           const morphoPrincipalConverter = getMorphoPrincipalConverterAddress();
 
           if (!COMMON.isAddress(principalConverterSplit)) {
-            throw new Error('Bondify PrincipalConverterSplit fixed address is missing');
+            throw new Error('Bondify PrincipalConverterSplit address is missing from the current environment');
           }
           if (!COMMON.isAddress(aavePrincipalConverter)) {
-            throw new Error('Bondify Aave Principal Converter fixed address is missing');
+            throw new Error('Bondify Aave Principal Converter address is missing from the current environment');
           }
           if (!COMMON.isAddress(morphoPrincipalConverter)) {
-            throw new Error('Bondify Morpho Principal Converter fixed address is missing');
+            throw new Error('Bondify Morpho Principal Converter address is missing from the current environment');
           }
 
           const config = {

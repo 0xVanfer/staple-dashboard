@@ -607,48 +607,21 @@
     });
   }
 
-  const FIXED_ADDRESSES = {
-    bondify_cbr: '0xB33FCCe9FF0c65E1e8fa5e186bcaa282239f189D',
-    bondify_slf: '0xDBbeeae60D58650A120321bddB403879d2D4F563',
-    bondify_cbrToken: '0x5e5b987C71f0A1a04ac01976d05Ba9dFdCd5B3D7',
-    bondify_oracle: '0x0Cafa38F9160b39d0b7D99A9dc4Dc025B65F4fb3',
-    bondify_looper: '0x16081b221C8A1da9161f8664391b98B0fa32C0f9',
-    bondify_yt: '0x33fa0B0Db8f071c4ecc82f984d33d2dEb866B673',
-    bondify_lendingCore: '0x9B313a915EcD48a4B20b9115bd499e74835089C0',
-    bondify_principalConverterSplit: '0xCfB36F7b8737dE2550762D963e2F8C95b986D571',
-    bondify_aavePrincipalConverter: '0x38da40612fCb86041520CA9B0FA527BE8dBB9Cb7',
-    bondify_aavePositionManager: '0x5924010dc330D29187208C89282447f2f86f089B',
-    bondify_morphoPrincipalConverter: '0xEB5b23e54239273f7EccE992DB5e58CC329c00dF',
-    bondify_morphoPositionManager: '0xE4f677E8eB77Fb34716A7B37cF7D3A3FCd823C92',
-    jrPricing_factory: '0x90E44EB7AB62f980a50AE5E405374b0FdAF55C9f',
-    jrPricing_oracleImpl: '0xf373FB1a6e2CD3bF306c0D411eF783A81e92f91A'
-  };
-
   const SECTIONS = {
     bondify: {
       label: 'Bondify',
       modes: ['fixed'],
       keys: [
-        { key: 'bondify_cbr', label: 'CBR' },
-        { key: 'bondify_slf', label: 'SLF' },
-        { key: 'bondify_cbrToken', label: 'CBR Token' },
-        { key: 'bondify_oracle', label: 'Oracle' },
-        { key: 'bondify_looper', label: 'Looper' },
-        { key: 'bondify_yt', label: 'YT' },
-        { key: 'bondify_lendingCore', label: 'Lending Core' },
         { key: 'bondify_principalConverterSplit', label: 'PCS (PrincipalConverterSplit)' },
         { key: 'bondify_aavePrincipalConverter', label: 'Aave Principal Converter' },
-        { key: 'bondify_aavePositionManager', label: 'Aave Position Manager' },
-        { key: 'bondify_morphoPrincipalConverter', label: 'Morpho Principal Converter' },
-        { key: 'bondify_morphoPositionManager', label: 'Morpho Position Manager' }
+        { key: 'bondify_morphoPrincipalConverter', label: 'Morpho Principal Converter' }
       ]
     },
     jrPricing: {
       label: 'Jr Pricing',
       modes: ['fixed'],
       keys: [
-        { key: 'jrPricing_factory', label: 'Factory' },
-        { key: 'jrPricing_oracleImpl', label: 'Oracle Implementation' }
+        { key: 'jrPricing_factory', label: 'Factory' }
       ]
     },
     staple: {
@@ -677,7 +650,7 @@
   };
 
   const MODE_LABELS = {
-    fixed: 'Fixed Addresses',
+    fixed: 'Manual Addresses',
     'address-provider': 'Address Provider'
   };
 
@@ -779,6 +752,7 @@
   let _rpcLoadSeq = 0;
   let _rpcEditorState = { mode: 'create', id: '' };
   let _versionEditorState = { mode: 'create', id: '' };
+  let _addressEditorState = { secId: '', key: '' };
   let _userEditorState = { mode: 'create', address: '' };
   let _readyResolve = null;
   let _readyPromise = new Promise((resolve) => { _readyResolve = resolve; });
@@ -1951,6 +1925,18 @@
     };
   }
 
+  function sanitizeSectionAddresses(secId, rawAddresses) {
+    const allowed = new Set((SECTIONS[secId]?.keys || []).map((item) => item.key));
+    const next = {};
+    Object.entries(rawAddresses || {}).forEach(([key, value]) => {
+      if (!allowed.has(key)) return;
+      const normalized = normAddr(String(value || '').trim());
+      if (!normalized) return;
+      next[key] = normalized;
+    });
+    return next;
+  }
+
   function parseTags(raw) {
     if (Array.isArray(raw)) {
       return [...new Set(raw.map((tag) => String(tag || '').trim().toLowerCase()).filter(Boolean))];
@@ -2243,7 +2229,7 @@
     const next = Object.assign(base, raw || {});
     const validModes = SECTIONS[secId]?.modes || (secId === 'staple' ? ['address-provider'] : ['fixed']);
     if (!validModes.includes(next.mode)) next.mode = secId === 'staple' ? 'address-provider' : 'fixed';
-    next.addresses = deepClone(next.addresses || {});
+    next.addresses = sanitizeSectionAddresses(secId, next.addresses || {});
     if (secId === 'staple') {
       next.addresses = {};
       let versions = Array.isArray(next.versions) ? next.versions : [];
@@ -2323,6 +2309,37 @@
     return stapleVersions().find((entry) => entry.id === _versionEditorState.id) || null;
   }
 
+  function setAddressEditorState(secId = '', key = '') {
+    _addressEditorState = { secId: secId || '', key: key || '' };
+  }
+
+  function currentAddressEditorEntry() {
+    const secId = String(_addressEditorState.secId || '');
+    const key = String(_addressEditorState.key || '');
+    if (!secId || !key) return null;
+    const sec = SECTIONS[secId];
+    const item = sec?.keys?.find((entry) => entry.key === key);
+    if (!item) return null;
+    return {
+      secId,
+      key,
+      label: item.label,
+      sectionLabel: sec.label,
+      value: sectionAddresses(secId)[key] || ''
+    };
+  }
+
+  function setManualSectionAddress(secId, key, value) {
+    const next = normalizeRpcConfig(deepClone(currentEnvConfig()));
+    const addresses = Object.assign({}, next.sections?.[secId]?.addresses || {});
+    const normalized = normAddr(String(value || '').trim());
+    if (normalized) addresses[key] = normalized;
+    else delete addresses[key];
+    next.sections[secId] = normalizeSectionConfig(secId, Object.assign({}, next.sections?.[secId] || {}, { addresses }));
+    _envConfig = next;
+    persist();
+  }
+
   function setUserEditorState(mode = 'create', address = '') {
     _userEditorState = { mode, address: address || '' };
   }
@@ -2382,7 +2399,8 @@
       return { value: '', source: 'blank' };
     }
 
-    return { value: FIXED_ADDRESSES[key] || '', source: FIXED_ADDRESSES[key] ? 'fixed' : 'blank' };
+    const value = sectionAddresses(secId)[key] || '';
+    return { value, source: value ? 'manual' : 'blank' };
   }
 
   function resolveAddress(key) {
@@ -2404,7 +2422,8 @@
 
     ['bondify', 'jrPricing'].forEach((secId) => {
       const label = SECTIONS[secId]?.label || secId;
-      parts.push(`${label} fixed addresses`);
+      const configuredCount = (SECTIONS[secId]?.keys || []).filter((item) => isAddr(sectionAddresses(secId)[item.key])).length;
+      parts.push(`${label} manual addresses ${configuredCount}/${SECTIONS[secId]?.keys?.length || 0}`);
     });
 
     return cfg.name ? `${cfg.name} · ${parts.join(' · ')}` : parts.join(' · ');
@@ -2970,16 +2989,10 @@
       stapleVersion: stapleVersion?.version || stapleVersion?.label || '',
       stapleAddressProvider: sectionAddressProvider(),
       jrPricingFactory: resolveAddress('jrPricing_factory'),
-      jrPricingOracleImpl: resolveAddress('jrPricing_oracleImpl'),
 
       bondifyPrincipalConverterSplit: resolveAddress('bondify_principalConverterSplit'),
       bondifyAavePrincipalConverter: resolveAddress('bondify_aavePrincipalConverter'),
       bondifyMorphoPrincipalConverter: resolveAddress('bondify_morphoPrincipalConverter'),
-      bondifyOracle: resolveAddress('bondify_oracle'),
-      bondifyLooper: resolveAddress('bondify_looper'),
-      bondifyLendingCore: resolveAddress('bondify_lendingCore'),
-      bondifyCbr: resolveAddress('bondify_cbr'),
-      bondifySlf: resolveAddress('bondify_slf'),
 
       poolImpl: resolveAddress('staple_poolImpl'),
       stapleVerifier: resolveAddress('staple_oracleVerifierStaple'),
@@ -3267,10 +3280,13 @@
         const meta = resolveAddressMeta(item.key);
         const sourceBadge = meta.source === 'provider'
           ? '<span class="override-badge">provider</span>'
-          : meta.source === 'fixed'
-            ? '<span class="override-badge">fixed</span>'
+          : meta.source === 'manual'
+            ? '<span class="override-badge">manual</span>'
             : '<span class="override-badge">blank</span>';
-        h += `<div class="addr-row ${meta.source === 'fixed' || meta.source === 'provider' ? 'overridden' : ''}"><span class="addr-label">${esc(item.label)}</span><span class="addr-value mono">${esc(meta.value || '—')}</span>${sourceBadge}${meta.value ? `<button class="btn-icon copy-btn" data-copy-address="${esc(meta.value)}">📋</button>` : ''}</div>`;
+        const actionButton = secId === 'staple'
+          ? ''
+          : `<button class="btn btn-sm btn-secondary" data-edit-address="${esc(secId)}::${esc(item.key)}">Modify</button>`;
+        h += `<div class="addr-row ${meta.source === 'manual' || meta.source === 'provider' ? 'overridden' : ''}"><span class="addr-label">${esc(item.label)}</span><span class="addr-value mono">${esc(meta.value || '—')}</span>${sourceBadge}${meta.value ? `<button class="btn-icon copy-btn" data-copy-address="${esc(meta.value)}">📋</button>` : ''}${actionButton}</div>`;
       });
       h += '</div></div>';
     });
@@ -3286,6 +3302,12 @@
         }
       });
     });
+    c.querySelectorAll('[data-edit-address]').forEach((btn) => btn.addEventListener('click', () => {
+      const raw = String(btn.getAttribute('data-edit-address') || '');
+      const [secId, key] = raw.split('::');
+      setAddressEditorState(secId || '', key || '');
+      renderOverridePanel();
+    }));
   }
 
   function renderOverridePanel() {
@@ -3329,6 +3351,21 @@
     h += '<button id="btn-new-staple-version" class="btn btn-secondary">New Draft</button>';
     h += `<button id="btn-refresh-staple-version-addresses" class="btn btn-secondary" ${isEdit ? '' : 'style="display:none"'}>Force Refresh Addresses</button>`;
     h += `<button id="btn-delete-staple-version-inline" class="btn btn-danger" ${isEdit ? '' : 'style="display:none"'}>Delete Version</button>`;
+    h += '</div>';
+    h += '</div></div>';
+
+    const editingAddress = currentAddressEditorEntry();
+    h += '<div class="registry-section-card registry-editor-card">';
+    h += '<h3>Bondify / Jr Pricing Address Editor</h3>';
+    h += '<p class="section-desc">These addresses are now manual per-environment inputs. Click Modify beside any Bondify or Jr Pricing address in the browser below.</p>';
+    h += '<div class="form-grid vertical-form">';
+    h += `<div class="form-item"><label>Section</label><input id="manual-address-section" class="form-control" value="${esc(editingAddress?.sectionLabel || '')}" placeholder="Click Modify on a row below" disabled></div>`;
+    h += `<div class="form-item"><label>Address Item</label><input id="manual-address-label" class="form-control" value="${esc(editingAddress?.label || '')}" placeholder="Click Modify on a row below" disabled></div>`;
+    h += `<div class="form-item"><label>Address</label><input id="manual-address-value" class="form-control mono" value="${esc(editingAddress?.value || '')}" placeholder="0x... or leave blank to clear" ${editingAddress ? '' : 'disabled'}></div>`;
+    h += '<div class="form-actions">';
+    h += `<button id="btn-save-manual-address" class="btn btn-primary" ${editingAddress ? '' : 'disabled'}>Save Address</button>`;
+    h += `<button id="btn-clear-manual-address" class="btn btn-danger" ${editingAddress ? '' : 'disabled'}>Clear Address</button>`;
+    h += `<button id="btn-cancel-manual-address" class="btn btn-secondary" ${editingAddress ? '' : 'disabled'}>Cancel</button>`;
     h += '</div>';
     h += '</div></div>';
     c.innerHTML = h;
@@ -3398,6 +3435,37 @@
         notify(error.message || error);
       }
     });
+
+    const saveManualAddressButton = document.getElementById('btn-save-manual-address');
+    if (saveManualAddressButton) saveManualAddressButton.addEventListener('click', () => {
+      const editing = currentAddressEditorEntry();
+      const input = document.getElementById('manual-address-value');
+      if (!editing || !input) return;
+      try {
+        const nextValue = String(input.value || '').trim();
+        if (nextValue && !isAddr(nextValue)) throw new Error('Address must be a valid 0x address');
+        setManualSectionAddress(editing.secId, editing.key, nextValue);
+        notify(nextValue ? `${editing.label} updated` : `${editing.label} cleared`);
+        render();
+      } catch (error) {
+        notify(error.message || error);
+      }
+    });
+
+    const clearManualAddressButton = document.getElementById('btn-clear-manual-address');
+    if (clearManualAddressButton) clearManualAddressButton.addEventListener('click', () => {
+      const editing = currentAddressEditorEntry();
+      if (!editing) return;
+      setManualSectionAddress(editing.secId, editing.key, '');
+      notify(`${editing.label} cleared`);
+      render();
+    });
+
+    const cancelManualAddressButton = document.getElementById('btn-cancel-manual-address');
+    if (cancelManualAddressButton) cancelManualAddressButton.addEventListener('click', () => {
+      setAddressEditorState('', '');
+      renderOverridePanel();
+    });
   }
 
   async function saveStapleVersionEditor() {
@@ -3414,8 +3482,6 @@
     }
 
     const next = normalizeRpcConfig(deepClone(currentEnvConfig()));
-    next.sections.bondify = normalizeSectionConfig('bondify', { mode: 'fixed', addresses: {} });
-    next.sections.jrPricing = normalizeSectionConfig('jrPricing', { mode: 'fixed', addresses: {} });
     const versions = [...(next.sections.staple.versions || [])];
     const previousEntry = _versionEditorState.mode === 'edit' && _versionEditorState.id
       ? versions.find((item) => item.id === _versionEditorState.id) || null
@@ -4146,7 +4212,10 @@
     refreshSymbols,
     getPoolInfo,
     getSymbols,
-    getFixedAddresses: () => deepClone(FIXED_ADDRESSES),
+    getFixedAddresses: () => ({
+      bondify: deepClone(sectionAddresses('bondify')),
+      jrPricing: deepClone(sectionAddresses('jrPricing'))
+    }),
     resolveAddress,
     resolveAddressMeta,
     getCurrentConfig: () => deepClone(currentEnvConfig()),
