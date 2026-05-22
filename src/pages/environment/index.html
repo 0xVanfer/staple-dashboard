@@ -10,10 +10,11 @@
     <script src="../../../abigen/stapleUIPoolDataProvider/stapleUIPoolDataProvider.js"></script>
     <script src="../../../abigen/stapleController/stapleController.js"></script>
     <script src="../../../abigen/mockExternalDexExtentions/mockExternalDexExtentions.js"></script>
-    <script src="../../lib/common.js?v=20260521r"></script>
+    <script src="../../lib/common.js?v=20260522d"></script>
     <script src="../../lib/rpcManager.js"></script>
     <script src="../../lib/contractCalls.js"></script>
-    <script src="./environment.js?v=20260521r" defer></script>
+    <script src="../../lib/ledgerDirect.bundle.js?v=20260522c"></script>
+    <script src="./environment.js?v=20260522d" defer></script>
     <script>var toHome = "../../../";</script>
     <script src="../../components/navbar/navbar.js" defer></script>
 
@@ -156,7 +157,7 @@
                 <div class="pane-body">
                     <div class="card">
                         <h3>Browser Wallet</h3>
-                        <p class="section-desc">Injected wallets are optional on Anvil/local RPC. For production writes, connect an explicit browser wallet. MetaMask and OKX are detected automatically; Ledger works through supported injected providers or wallet-side account bridges.</p>
+                        <p class="section-desc">Injected wallets are optional on Anvil/local RPC. For production writes, connect an explicit browser wallet. MetaMask and OKX are detected automatically; Ledger can be used either through supported injected providers or through direct WebHID connection in a compatible secure browser. If this site already has permission for the device, Ledger Direct reconnects to it directly without fetching any remote wallet module.</p>
                         <div id="wallet-status-card" class="active-rpc-card feature-surface rpc-runtime-card">Scanning browser wallets...</div>
                         <div class="form-grid vertical-form compact-form">
                             <div class="form-item">

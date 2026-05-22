@@ -444,10 +444,14 @@
     const prices = pricesHuman18.map((p) => ethers.utils.parseUnits(String(p), 18));
     const baseTokens = tokens.map(() => ethers.constants.AddressZero);
 
-    try {
-      await verifier.callStatic.updatePrices(tokens, baseTokens, prices);
-    } catch (error) {
-      throw new Error(`Staple price update would revert: ${extractReadableError(error)}`);
+    const skipPreflight = !!(COMMON.shouldSkipWritePreflight && COMMON.shouldSkipWritePreflight({ requireSigner: true }));
+
+    if (!skipPreflight) {
+      try {
+        await verifier.callStatic.updatePrices(tokens, baseTokens, prices);
+      } catch (error) {
+        throw new Error(`Staple price update would revert: ${extractReadableError(error)}`);
+      }
     }
 
     try {

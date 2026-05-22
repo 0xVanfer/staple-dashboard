@@ -73,6 +73,80 @@ test('environment page can detect OKX wallet injection fallback', async ({ page 
   await expect(page.locator('#wallet-provider-select')).toContainText('OKX Wallet');
 });
 
+test('environment page loads the local Ledger Direct runtime bundle', async ({ page }) => {
+  await page.goto('/src/pages/environment/index.html', { waitUntil: 'domcontentloaded' });
+  const runtime = await page.evaluate(() => ({
+    hasCreateSigner: typeof window.StapleLedgerDirect?.createSigner === 'function',
+    hasDeviceList: typeof window.StapleLedgerDirect?.listAuthorizedDevices === 'function'
+  }));
+  expect(runtime.hasCreateSigner).toBeTruthy();
+  expect(runtime.hasDeviceList).toBeTruthy();
+});
+
+test('environment page exposes Ledger Direct when WebHID support is available', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__ledgerDirectHooks = {
+      isSupported: () => true,
+      hasAuthorizedDevice: async () => false
+    };
+  });
+  await page.goto('/src/pages/environment/index.html', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#wallet-provider-select')).toContainText('Ledger Direct (WebHID)');
+  await expect(page.locator('#wallet-status-card')).toContainText('Ledger Direct is available');
+});
+
+test('environment page can connect Ledger Direct and use it as the active signer', async ({ page }) => {
+  const ledgerAddress = '0x6666666666666666666666666666666666666666';
+
+  await page.addInitScript(() => {
+    const ledgerAddress = '0x6666666666666666666666666666666666666666';
+    window.__ledgerDirectHookCalls = [];
+    window.__ledgerDirectHooks = {
+      isSupported: () => true,
+      hasAuthorizedDevice: async () => true,
+      createSigner: async ({ provider, path, silent }) => {
+        window.__ledgerDirectHookCalls.push({ path, silent, hasProvider: !!provider });
+        return {
+          _isSigner: true,
+          provider,
+          getAddress: async () => ledgerAddress,
+          signMessage: async () => '0xledger-signature',
+          connect(nextProvider) {
+            this.provider = nextProvider;
+            return this;
+          }
+        };
+      },
+      disconnect: async () => {
+        window.__ledgerDirectHookCalls.push({ disconnect: true });
+      }
+    };
+  });
+
+  await page.goto('/src/pages/environment/index.html', { waitUntil: 'domcontentloaded' });
+  await page.evaluate(async () => {
+    await window.environment.connectBrowserWallet('ledger-direct-webhid');
+  });
+
+  const result = await page.evaluate(async () => {
+    const signer = await window.stapleCommon.resolveSigner('0x1234567890123456789012345678901234567890');
+    return {
+      walletState: window.environment.getWalletState(),
+      signerAddress: await signer.getAddress(),
+      hookCalls: window.__ledgerDirectHookCalls.slice()
+    };
+  });
+
+  expect(result.walletState.connected).toBeTruthy();
+  expect(result.walletState.providerId).toBe('ledger-direct-webhid');
+  expect(result.walletState.providerLabel).toBe('Ledger Direct (WebHID)');
+  expect(result.walletState.address).toBe(ledgerAddress);
+  expect(result.signerAddress).toBe(ledgerAddress);
+  expect(result.hookCalls.some((call) => call.path === "m/44'/60'/0'/0/0")).toBeTruthy();
+  await expect(page.locator('#wallet-status-card')).toContainText('Ledger Direct (WebHID)');
+  await expect(page.locator('#wallet-status-card')).toContainText(ledgerAddress);
+});
+
 test('environment page does not auto-connect from previously exposed wallet accounts', async ({ page }) => {
   await page.addInitScript(() => {
     const priorAddress = '0x1111111111111111111111111111111111111111';
@@ -146,7 +220,7 @@ test('environment page connects the concrete MetaMask provider instead of an agg
   });
 
   await page.goto('/src/pages/environment/index.html', { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('#wallet-provider-select option')).toHaveCount(2);
+  await expect(page.locator('#wallet-provider-select option')).toHaveCount(3);
 
   const result = await page.evaluate(async () => {
     const wallets = window.environment.listBrowserWallets();

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`staple-dashboard` is the production-oriented static dashboard for Staple.
+`staple-dashboard-prod` is the production-oriented static dashboard for Staple.
 
 Compared with the original test-oriented dashboard, this version:
 
@@ -17,7 +17,7 @@ The frontend now includes baseline browser-wallet support for:
 - MetaMask (injected wallet)
 - OKX Wallet (injected wallet)
 - Compatible injected wallets
-- Ledger through a compatible injected wallet or wallet-side bridge flow
+- Ledger through either a compatible injected wallet or a direct WebHID connection flow
 
 ## Local Startup
 
@@ -25,6 +25,7 @@ The app must be opened over HTTP. Do not open it via `file://`.
 
 ```bash
 npm install
+npm run build:ledger-direct
 npm run start:local
 ```
 
@@ -72,6 +73,8 @@ The **Wallet & Accounts** section on the Environment page includes three account
 
 1. **Browser Wallet**
    - Does not auto-connect by default; a session is established only after the user explicitly clicks connect
+   - Supports both injected wallets and Ledger Direct over WebHID when the browser environment allows it
+   - Ledger Direct is served from the local bundled runtime in `src/lib/ledgerDirect.bundle.js`, so it does not depend on fetching remote ESM modules at connect time
    - Once a browser wallet is connected, all write operations must prefer and enforce that wallet signer
    - If the connected wallet chain ID does not match the current RPC chain ID, wallet-backed writes are blocked until the wallet is switched to the correct chain
 
@@ -118,4 +121,4 @@ That smoke coverage includes:
 - Whether the mint entry points still exist on the Test Tokens page
 - Whether the Arbitrage page remains accessible
 
-`staple-dashboard` still keeps development- and test-oriented Playwright suites and scripts for fork, local, and multi-environment validation. `prod-smoke` is only one fast regression subset within that broader test set.
+`staple-dashboard-prod` still keeps development- and test-oriented Playwright suites and scripts for fork, local, and multi-environment validation. `prod-smoke` is only one fast regression subset within that broader test set.

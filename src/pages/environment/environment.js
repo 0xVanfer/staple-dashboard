@@ -49,6 +49,9 @@
    * state overrides, and its safety depends on NOT becoming a generic transfer button.
    */
   const MINTER_NATIVE_REFRESH_AMOUNT_ETH = '0.000001';
+  const LEDGER_DIRECT_ID = 'ledger-direct-webhid';
+  const LEDGER_DIRECT_LABEL = 'Ledger Direct (WebHID)';
+  const LEDGER_DEFAULT_DERIVATION_PATH = "m/44'/60'/0'/0/0";
 
   function inferredWalletLabel(provider, fallbackIndex = 0) {
     if (!provider) return 'Injected Wallet';
@@ -82,6 +85,59 @@
     return !!(provider && typeof provider === 'object' && typeof provider.request === 'function');
   }
 
+  function getLedgerDirectBridge() {
+    return window.StapleLedgerDirect || null;
+  }
+
+  function isLedgerDirectSupported() {
+    try {
+      if (window.__ledgerDirectHooks?.isSupported) return !!window.__ledgerDirectHooks.isSupported();
+    } catch (_) {}
+    return !!(
+      typeof window !== 'undefined'
+      && window.isSecureContext
+      && navigator?.hid
+      && (window.__ledgerDirectHooks?.createSigner || getLedgerDirectBridge()?.createSigner)
+    );
+  }
+
+  async function listAuthorizedLedgerDirectDevices() {
+    try {
+      if (window.__ledgerDirectHooks?.listAuthorizedDevices) {
+        return await window.__ledgerDirectHooks.listAuthorizedDevices();
+      }
+      if (window.__ledgerDirectHooks?.hasAuthorizedDevice) {
+        return (await window.__ledgerDirectHooks.hasAuthorizedDevice()) ? [{ productName: 'Ledger device' }] : [];
+      }
+      const bridge = getLedgerDirectBridge();
+      if (bridge?.listAuthorizedDevices) {
+        const devices = await bridge.listAuthorizedDevices();
+        return Array.isArray(devices) ? devices : [];
+      }
+      if (bridge?.hasAuthorizedDevice) {
+        return (await bridge.hasAuthorizedDevice()) ? [{ productName: 'Ledger device' }] : [];
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async function hasAuthorizedLedgerDirectDevice() {
+    const devices = await listAuthorizedLedgerDirectDevices();
+    return devices.length > 0;
+  }
+
+  function ledgerDirectWalletCandidate() {
+    if (!isLedgerDirectSupported()) return null;
+    return {
+      id: LEDGER_DIRECT_ID,
+      label: LEDGER_DIRECT_LABEL,
+      kind: 'ledger-direct',
+      provider: null
+    };
+  }
+
   function detectBrowserWallets() {
     if (typeof window === 'undefined') return [];
     const candidates = [];
@@ -107,7 +163,7 @@
 
     const seenProviders = new Set();
     const seenWallets = new Set();
-    return candidates.map((provider, index) => {
+    const wallets = candidates.map((provider, index) => {
       if (seenProviders.has(provider)) return null;
       seenProviders.add(provider);
       const identity = walletProviderIdentity(provider, index);
@@ -115,8 +171,12 @@
       seenWallets.add(identity);
       const label = inferredWalletLabel(provider, index);
       const id = `${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${identity.replace(/[^a-z0-9:._-]+/g, '-')}`;
-      return { id, label, provider };
+      return { id, label, kind: 'injected', provider };
     }).filter(Boolean);
+
+    const ledgerDirect = ledgerDirectWalletCandidate();
+    if (ledgerDirect) wallets.push(ledgerDirect);
+    return wallets;
   }
 
   function getSelectedDetectedWallet() {
@@ -131,8 +191,11 @@
 
   function getConnectedWalletSigner() {
     const selected = getSelectedDetectedWallet();
-    if (!selected?.provider || !window.ethers?.providers?.Web3Provider) return null;
     if (!_walletState.connected || !isAddr(_walletState.address) || !walletMatchesCurrentRpc()) return null;
+    if (selected?.kind === 'ledger-direct') {
+      return _walletRuntime.kind === 'ledger-direct' ? (_walletRuntime.signer || null) : null;
+    }
+    if (!selected?.provider || !window.ethers?.providers?.Web3Provider) return null;
     try {
       const web3Provider = new ethers.providers.Web3Provider(selected.provider, 'any');
       return web3Provider.getSigner(_walletState.address);
@@ -223,14 +286,119 @@
     );
   }
 
+  async function createLedgerDirectSigner({ provider, silent = false } = {}) {
+    const rpcProvider = provider || _provider || (COMMON.getRpcProvider ? COMMON.getRpcProvider() : null);
+    if (!rpcProvider) throw new Error('RPC provider is not ready yet. Please let the Environment page finish loading and retry.');
+
+    if (window.__ledgerDirectHooks?.createSigner) {
+      const result = await window.__ledgerDirectHooks.createSigner({
+        provider: rpcProvider,
+        path: LEDGER_DEFAULT_DERIVATION_PATH,
+        silent
+      });
+      const signer = result?.signer || result;
+      if (!signer) throw new Error('Ledger direct signer hook returned no signer.');
+      return {
+        signer,
+        address: result?.address || '',
+        deviceLabel: String(result?.deviceLabel || ''),
+        cleanup: async () => {
+          try {
+            await window.__ledgerDirectHooks?.disconnect?.();
+          } catch (_) {}
+        }
+      };
+    }
+
+    const bridge = getLedgerDirectBridge();
+    if (!bridge?.createSigner) {
+      throw new Error('Ledger direct runtime is not available locally. Rebuild ledgerDirect.bundle.js and refresh the page.');
+    }
+    const result = await bridge.createSigner({
+      provider: rpcProvider,
+      path: LEDGER_DEFAULT_DERIVATION_PATH,
+      silent
+    });
+    const signer = result?.signer || result;
+    if (!signer) throw new Error('Ledger direct runtime did not return a signer.');
+    return {
+      signer,
+      address: result?.address || '',
+      deviceLabel: String(result?.deviceLabel || ''),
+      cleanup: typeof result?.cleanup === 'function'
+        ? result.cleanup
+        : async () => {
+          try {
+            await signer?.transport?.close?.();
+          } catch (_) {}
+        }
+    };
+  }
+
+  function clearWalletRuntime() {
+    const cleanup = _walletRuntime?.cleanup;
+    _walletRuntime = { kind: '', signer: null, cleanup: null, deviceLabel: '' };
+    if (typeof cleanup === 'function') {
+      Promise.resolve().then(() => cleanup()).catch(() => {});
+    }
+  }
+
+  async function connectLedgerDirectWallet({ silent = false } = {}) {
+    if (!isLedgerDirectSupported()) {
+      throw new Error('Ledger direct connection requires WebHID in a secure context (Chrome/Edge over https:// or localhost).');
+    }
+    if (!silent) {
+      notify('Ledger direct connect: unlock the device, open the Ethereum app, then choose the Ledger in the browser prompt. Approve any permission request on the device if asked.', 'info');
+    }
+    const { signer, cleanup, address: returnedAddress, deviceLabel } = await createLedgerDirectSigner({ provider: _provider, silent });
+    const address = normAddr(returnedAddress || await signer.getAddress());
+    if (!isAddr(address)) {
+      await cleanup?.();
+      throw new Error('Ledger did not return a valid Ethereum address. Make sure the Ethereum app is open and retry.');
+    }
+    const network = await (_provider?.getNetwork ? _provider.getNetwork() : Promise.resolve({ chainId: _chainId || 0 }));
+    clearWalletRuntime();
+    _walletRuntime = { kind: 'ledger-direct', signer, cleanup, deviceLabel: String(deviceLabel || '') };
+    writeWalletSessionHint({ id: LEDGER_DIRECT_ID, label: LEDGER_DIRECT_LABEL });
+    setWalletRuntimeState({
+      connected: true,
+      providerId: LEDGER_DIRECT_ID,
+      providerLabel: LEDGER_DIRECT_LABEL,
+      address,
+      chainId: Number(network?.chainId || _chainId || 0) || 0
+    });
+    if (!silent) notify(`Connected ${LEDGER_DIRECT_LABEL}${deviceLabel ? ` (${deviceLabel})` : ''}`);
+    return { ..._walletState };
+  }
+
   async function recoverWalletSession() {
     const hinted = readWalletSessionHint();
     if (!hinted?.providerId) return null;
+
+    if (hinted.providerId === LEDGER_DIRECT_ID) {
+      try {
+        const authorized = await hasAuthorizedLedgerDirectDevice();
+        if (!authorized) {
+          writeWalletSessionHint(null);
+          clearWalletRuntime();
+          setWalletRuntimeState({ connected: false, providerId: '', providerLabel: '', address: '', chainId: 0 });
+          return null;
+        }
+        return await connectLedgerDirectWallet({ silent: true });
+      } catch (error) {
+        console.warn('wallet session recover failed', error);
+        writeWalletSessionHint(null);
+        clearWalletRuntime();
+        setWalletRuntimeState({ connected: false, providerId: '', providerLabel: '', address: '', chainId: 0 });
+        return null;
+      }
+    }
 
     const wallets = detectBrowserWallets();
     const selected = wallets.find((item) => item.id === hinted.providerId) || null;
     if (!selected?.provider?.request) {
       writeWalletSessionHint(null);
+      clearWalletRuntime();
       setWalletRuntimeState({ connected: false, providerId: '', providerLabel: '', address: '', chainId: 0 });
       return null;
     }
@@ -239,6 +407,7 @@
       const accounts = await withTimeout(selected.provider.request({ method: 'eth_accounts' }), 5000, 'timeout');
       if (accounts === 'timeout' || !Array.isArray(accounts) || !accounts.length) {
         writeWalletSessionHint(null);
+        clearWalletRuntime();
         setWalletRuntimeState({ connected: false, providerId: selected.id, providerLabel: selected.label, address: '', chainId: 0 });
         return null;
       }
@@ -246,6 +415,7 @@
       const address = normAddr(accounts[0] || '');
       if (!isAddr(address)) {
         writeWalletSessionHint(null);
+        clearWalletRuntime();
         setWalletRuntimeState({ connected: false, providerId: selected.id, providerLabel: selected.label, address: '', chainId: 0 });
         return null;
       }
@@ -262,6 +432,7 @@
     } catch (error) {
       console.warn('wallet session recover failed', error);
       writeWalletSessionHint(null);
+      clearWalletRuntime();
       setWalletRuntimeState({ connected: false, providerId: '', providerLabel: '', address: '', chainId: 0 });
       return null;
     }
@@ -270,10 +441,15 @@
   async function connectBrowserWallet(walletId = '') {
     const wallets = detectBrowserWallets();
     const selected = wallets.find((item) => item.id === walletId) || wallets[0] || null;
+    if (!selected) throw new Error('No supported browser wallet detected');
+    if (selected.kind === 'ledger-direct') {
+      return connectLedgerDirectWallet();
+    }
     if (!selected?.provider) throw new Error('No supported browser wallet detected');
     const provider = selected.provider;
 
     // Explicit connect only. No account reads outside this flow should ever mark the page as connected.
+    clearWalletRuntime();
     await revokeWalletAccountPermission(provider, 1200);
 
     try {
@@ -348,12 +524,22 @@
     const provider = selected?.provider || null;
     const providerLabel = _walletState.providerLabel || selected?.label || 'browser wallet';
     const previousAddress = normAddr(_walletState.address || '');
-    const revokeResult = await revokeWalletAccountPermission(provider, 1200);
 
     if (previousAddress && _selectedUser && previousAddress.toLowerCase() === String(_selectedUser).toLowerCase()) {
       _selectedUser = '';
     }
+
+    if (selected?.kind === 'ledger-direct' || _walletState.providerId === LEDGER_DIRECT_ID) {
+      writeWalletSessionHint(null);
+      clearWalletRuntime();
+      setWalletRuntimeState({ connected: false, providerId: '', providerLabel: '', address: '', chainId: 0 });
+      notify(`Disconnected ${providerLabel}. Reconnect to reopen the Ledger prompt and choose the device again.`);
+      return;
+    }
+
+    const revokeResult = await revokeWalletAccountPermission(provider, 1200);
     writeWalletSessionHint(null);
+    clearWalletRuntime();
     setWalletRuntimeState({ connected: false, providerId: '', providerLabel: '', address: '', chainId: 0 });
 
     if (revokeResult === 'revoked') {
@@ -579,6 +765,7 @@
   let _chainlinkConfig = { apiKey: '', apiSecret: '' };
   let _rememberChainlinkForSession = false;
   let _walletState = { connected: false, providerId: '', providerLabel: '', address: '', chainId: 0 };
+  let _walletRuntime = { kind: '', signer: null, cleanup: null, deviceLabel: '' };
   const _walletEventBindings = new WeakSet();
 
   let _chainId = 0;
@@ -1682,16 +1869,6 @@
     }
 
     const removingSelf = action === 'revoke' && memberAddress.toLowerCase() === currentUser.toLowerCase();
-
-    if (action === 'revoke') {
-      if (removingSelf && contract.callStatic?.renounceRole) {
-        await contract.callStatic.renounceRole(role, currentUser);
-      } else if (contract.callStatic?.revokeRole) {
-        await contract.callStatic.revokeRole(role, memberAddress);
-      }
-    } else if (contract.callStatic?.grantRole) {
-      await contract.callStatic.grantRole(role, memberAddress);
-    }
 
     const tx = action === 'revoke'
       ? (removingSelf && typeof contract.renounceRole === 'function'
@@ -3313,16 +3490,25 @@
     if (switchButton) {
       const shouldEnable = !!(_walletState.connected && _chainId && !walletMatch && activeWallet?.provider?.request);
       switchButton.disabled = !shouldEnable;
-      switchButton.title = shouldEnable ? 'Request the connected wallet to switch onto the selected RPC chain' : 'Wallet and RPC already match, or this environment can continue with local/private-key signers without switching the wallet';
+      switchButton.title = shouldEnable
+        ? 'Request the connected wallet to switch onto the selected RPC chain'
+        : (activeWallet?.kind === 'ledger-direct'
+          ? 'Ledger Direct signs against the selected RPC directly, so there is no wallet-side chain switch action.'
+          : 'Wallet and RPC already match, or this environment can continue with local/private-key signers without switching the wallet');
     }
 
     if (card) {
       if (!wallets.length) {
         card.innerHTML = '<div class="status-stack"><h4 class="status-title">Browser Wallet</h4><div class="status-line"><span class="status-label">Status</span><span class="status-value">No injected wallet detected</span></div><div class="status-line status-wrap"><span class="status-label">Hint</span><span class="status-value">Install or unlock MetaMask / OKX Wallet, or use a compatible injected wallet bridge.</span></div></div>';
       } else if (_walletState.connected && isAddr(_walletState.address)) {
-        card.innerHTML = `<div class="status-stack"><h4 class="status-title">Connected Wallet</h4><div class="status-line"><span class="status-label">Provider</span><span class="status-value">${esc(_walletState.providerLabel || activeWallet?.label || 'Injected Wallet')}</span></div><div class="status-line status-wrap"><span class="status-label">Account</span><span class="status-value mono">${esc(_walletState.address)}</span></div><div class="status-line"><span class="status-label">Wallet Chain</span><span class="status-value mono">${esc(String(_walletState.chainId || 0))}</span></div><div class="status-line"><span class="status-label">RPC Chain</span><span class="status-value mono">${esc(String(_chainId || 0))}</span></div><div class="status-line status-wrap"><span class="status-label">Compatibility</span><span class="status-value">${walletMatch ? 'Wallet chain matches selected RPC' : 'Wallet chain does not match selected RPC. Wallet-backed writes are blocked until you switch, but local Anvil/private-key signer paths can still work.'}</span></div></div>`;
+        const isLedgerDirect = _walletState.providerId === LEDGER_DIRECT_ID;
+        const ledgerDeviceLine = isLedgerDirect && _walletRuntime.deviceLabel
+          ? `<div class="status-line status-wrap"><span class="status-label">Device</span><span class="status-value">${esc(_walletRuntime.deviceLabel)}</span></div>`
+          : '';
+        card.innerHTML = `<div class="status-stack"><h4 class="status-title">Connected Wallet</h4><div class="status-line"><span class="status-label">Provider</span><span class="status-value">${esc(_walletState.providerLabel || activeWallet?.label || 'Injected Wallet')}</span></div>${ledgerDeviceLine}<div class="status-line status-wrap"><span class="status-label">Account</span><span class="status-value mono">${esc(_walletState.address)}</span></div><div class="status-line"><span class="status-label">Wallet Chain</span><span class="status-value mono">${esc(String(_walletState.chainId || 0))}</span></div><div class="status-line"><span class="status-label">RPC Chain</span><span class="status-value mono">${esc(String(_chainId || 0))}</span></div><div class="status-line status-wrap"><span class="status-label">Compatibility</span><span class="status-value">${isLedgerDirect ? 'Ledger Direct signs against the selected RPC directly. If an authorized device is already connected, this page reuses it directly; otherwise the browser will ask you to choose the Ledger once.' : (walletMatch ? 'Wallet chain matches selected RPC' : 'Wallet chain does not match selected RPC. Wallet-backed writes are blocked until you switch, but local Anvil/private-key signer paths can still work.')}</span></div></div>`;
       } else {
-        card.innerHTML = `<div class="status-stack"><h4 class="status-title">Browser Wallet</h4><div class="status-line"><span class="status-label">Detected</span><span class="status-value">${esc(wallets.map((item) => item.label).join(', '))}</span></div><div class="status-line status-wrap"><span class="status-label">Status</span><span class="status-value">Ready to connect if this environment needs a wallet signer</span></div><div class="status-line"><span class="status-label">RPC Chain</span><span class="status-value mono">${esc(String(_chainId || 0))}</span></div><div class="status-line status-wrap"><span class="status-label">Hint</span><span class="status-value">If you are on Anvil/local RPC, you can continue without connecting a wallet. Production writes now require an explicit browser-wallet connection.</span></div></div>`;
+        const directLedgerAvailable = wallets.some((item) => item.id === LEDGER_DIRECT_ID);
+        card.innerHTML = `<div class="status-stack"><h4 class="status-title">Browser Wallet</h4><div class="status-line"><span class="status-label">Detected</span><span class="status-value">${esc(wallets.map((item) => item.label).join(', '))}</span></div><div class="status-line status-wrap"><span class="status-label">Status</span><span class="status-value">Ready to connect if this environment needs a wallet signer</span></div><div class="status-line"><span class="status-label">RPC Chain</span><span class="status-value mono">${esc(String(_chainId || 0))}</span></div><div class="status-line status-wrap"><span class="status-label">Hint</span><span class="status-value">${directLedgerAvailable ? 'Ledger Direct is available. Click Connect Wallet to use an already-authorized connected Ledger immediately, or approve the browser device picker once if this site has not seen the device yet.' : 'If you are on Anvil/local RPC, you can continue without connecting a wallet. Production writes now require an explicit browser-wallet connection.'}</span></div></div>`;
       }
     }
   }
@@ -3539,6 +3725,16 @@
     _chainId = blockInfo.chainId;
     _blockNumber = blockInfo.blockNumber;
     _blockTime = blockInfo.blockTime;
+    if (_walletState.connected && _walletState.providerId === LEDGER_DIRECT_ID) {
+      try {
+        await connectLedgerDirectWallet({ silent: true });
+      } catch (error) {
+        console.warn('ledger direct reconnect failed after RPC change', error);
+        writeWalletSessionHint(null);
+        clearWalletRuntime();
+        setWalletRuntimeState({ connected: false, providerId: '', providerLabel: '', address: '', chainId: 0 });
+      }
+    }
     render();
 
     if (stapleMode === 'address-provider' && isAddr(providerAddr)) {
@@ -3593,7 +3789,7 @@
         const wallets = detectBrowserWallets();
         notify(wallets.length
           ? `Detected wallets refreshed: ${wallets.map((item) => item.label).join(', ')}`
-          : 'No injected wallet detected after refresh. Please unlock MetaMask / OKX Wallet and retry.');
+          : 'No injected wallet detected after refresh. Please unlock MetaMask / OKX Wallet, or use Ledger Direct in a WebHID-capable browser.');
       } catch (error) {
         notify(error.message || error);
       } finally {
@@ -3606,9 +3802,10 @@
     if (connectWalletButton) connectWalletButton.addEventListener('click', async () => {
       connectWalletButton.disabled = true;
       const originalText = connectWalletButton.textContent;
-      connectWalletButton.textContent = 'Connecting...';
+      const selectedId = String(document.getElementById('wallet-provider-select')?.value || '');
+      connectWalletButton.textContent = selectedId === LEDGER_DIRECT_ID ? 'Opening Ledger Prompt...' : 'Connecting...';
       try {
-        await connectBrowserWallet(String(document.getElementById('wallet-provider-select')?.value || ''));
+        await connectBrowserWallet(selectedId);
       } catch (error) {
         notify(error.message || error);
       } finally {

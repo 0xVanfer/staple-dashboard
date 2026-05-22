@@ -1,16 +1,21 @@
 {
-    "name": "staple-dashboard",
-    "private": true,
-    "version": "1.0.0",
-    "description": "Production-oriented static Staple dashboard with wallet-backed browser flows.",
-    "scripts": {
-        "start:local": "sh -c 'python3 -m http.server ${PORT:-8787}'",
-        "test:e2e": "playwright test",
-        "test:e2e:prod-smoke": "playwright test tests/e2e/prod-smoke.spec.js",
-        "test:e2e:mainnet-fork": "playwright test tests/e2e/mainnet-fork.spec.js",
-        "test:e2e:sepolia": "playwright test tests/e2e/sepolia.spec.js"
-    },
-    "devDependencies": {
-        "@playwright/test": "^1.54.2"
-    }
+  "name": "staple-dashboard-prod",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Production-oriented static Staple dashboard with wallet-backed browser flows.",
+  "scripts": {
+    "start:local": "sh -c 'python3 -m http.server ${PORT:-8787}'",
+    "build:ledger-direct": "esbuild src/lib/ledgerDirect.source.js --bundle --format=iife --platform=browser --target=es2020 --minify --inject:src/lib/ledgerDirect.buffer-shim.js --outfile=src/lib/ledgerDirect.bundle.js",
+    "test:e2e": "playwright test",
+    "test:e2e:prod-smoke": "playwright test tests/e2e/prod-smoke.spec.js",
+    "test:e2e:mainnet-fork": "playwright test tests/e2e/mainnet-fork.spec.js",
+    "test:e2e:sepolia": "playwright test tests/e2e/sepolia.spec.js"
+  },
+  "devDependencies": {
+    "@ledgerhq/hw-app-eth": "^7.8.3",
+    "@ledgerhq/hw-transport-webhid": "^6.35.2",
+    "@playwright/test": "^1.54.2",
+    "buffer": "^6.0.3",
+    "esbuild": "^0.28.0"
+  }
 }

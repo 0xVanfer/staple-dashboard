@@ -432,6 +432,28 @@
     return candidates;
   }
 
+  function connectedBrowserWalletState() {
+    const env = window.environment;
+    const walletState = env?.getWalletState ? env.getWalletState() : null;
+    const walletConnected = !!(walletState?.connected && isAddress(walletState.address));
+    return {
+      env,
+      walletState,
+      walletConnected
+    };
+  }
+
+  function shouldSkipWritePreflight(options = {}) {
+    const { env, walletConnected } = connectedBrowserWalletState();
+    if (!walletConnected) return false;
+    if (!options.requireSigner) return true;
+    try {
+      return !!(env?.getConnectedWalletSigner && env.getConnectedWalletSigner());
+    } catch (_) {
+      return false;
+    }
+  }
+
   async function resolveSigner(signerOrAddr, options = {}) {
     if (isSigner(signerOrAddr)) return signerOrAddr;
 
@@ -472,8 +494,7 @@
 
     const allParams = env.getAllParams ? env.getAllParams() : {};
     const isProduction = !!allParams.isProduction;
-    const walletState = env?.getWalletState ? env.getWalletState() : null;
-    const walletConnected = !!(walletState?.connected && isAddress(walletState.address));
+    const { walletConnected } = connectedBrowserWalletState();
 
     // Runtime rule: once a browser wallet is connected, write operations must use that
     // wallet signer. Do not silently fall back to local impersonation.
@@ -731,6 +752,8 @@
     isSigner,
     resolveSigner,
     discoverDynamicAdminCandidates,
+    connectedBrowserWalletState,
+    shouldSkipWritePreflight,
     getExplorerLink,
   };
 })();
