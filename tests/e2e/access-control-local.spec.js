@@ -32,7 +32,6 @@ async function seedAccessControlProfile(page, { rpcUrl, addressProvider }) {
       name: 'Local Mainnet Fork',
       sections: {
         bondify: { mode: 'fixed', addresses: {} },
-        jrPricing: { mode: 'fixed', addresses: {} },
         staple: {
           mode: 'address-provider',
           addresses: {},
@@ -40,7 +39,8 @@ async function seedAccessControlProfile(page, { rpcUrl, addressProvider }) {
             id: 'ver-mainnet-fork',
             label: '260519-mainnet-fork-check',
             version: '260519-mainnet-fork-check',
-            addressProvider
+            addressProvider,
+            jrPricingFactory: '0x1000000000000000000000000000000000000001'
           }],
           selectedVersionId: 'ver-mainnet-fork'
         }

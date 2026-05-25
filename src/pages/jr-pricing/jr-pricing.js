@@ -62,18 +62,6 @@
     return getEnvAddress('jrPricingFactory');
   }
 
-  function getPrincipalConverterSplitAddress() {
-    return getEnvAddress('bondifyPrincipalConverterSplit');
-  }
-
-  function getAavePrincipalConverterAddress() {
-    return getEnvAddress('bondifyAavePrincipalConverter');
-  }
-
-  function getMorphoPrincipalConverterAddress() {
-    return getEnvAddress('bondifyMorphoPrincipalConverter');
-  }
-
   function addressOrZero(value) {
     return COMMON.isAddress(value) ? ethers.utils.getAddress(value) : ZERO_ADDRESS;
   }
@@ -197,6 +185,32 @@
       borrowRateStrategy: params.borrowRateStrategy || ZERO_ADDRESS,
       riskFreeRate: Number(params.riskFreeRate || 0),
       waitingPeriodRisk: Number(params.waitingPeriodRisk || 0)
+    };
+  }
+
+  function isFactoryDefaultNonFlashEdit(row) {
+    return !!(row && COMMON.isAddress(row.collateralToken) && COMMON.isAddress(row.lendingToken));
+  }
+
+  function nonFlashSourceLabel(row) {
+    return row?.hasCustomParams ? 'Token Custom Override' : 'Oracle Default';
+  }
+
+  function getRowEditableNonFlashParams(row) {
+    if (isFactoryDefaultNonFlashEdit(row)) {
+      return cloneNonFlashParams(row?.oracleDefaultNonFlashLoanParams);
+    }
+    return cloneNonFlashParams(row?.nonFlashLoanParams);
+  }
+
+  function readNonFlashParamsFromModal() {
+    const strategyInput = document.getElementById('modal-borrow-strategy').value.trim();
+    return {
+      waitTime: daysToSeconds(document.getElementById('modal-wait-time').value),
+      borrowRate: percentToRate(document.getElementById('modal-borrow-rate').value),
+      borrowRateStrategy: COMMON.isAddress(strategyInput) ? ethers.utils.getAddress(strategyInput) : ZERO_ADDRESS,
+      riskFreeRate: percentToRate(document.getElementById('modal-risk-free-rate').value),
+      waitingPeriodRisk: percentToRate(document.getElementById('modal-waiting-risk').value)
     };
   }
 
@@ -415,9 +429,13 @@
                 <span class="metric-label">Borrow Rate Strategy</span>
                 <span class="metric-value mono">${formatAddressOrDash(row.nonFlashLoanParams.borrowRateStrategy)}</span>
               </div>
+              <div class="metric-row">
+                <span class="metric-label">Param Source</span>
+                <span class="metric-value">${nonFlashSourceLabel(row)}</span>
+              </div>
             </div>
             <div class="cell-actions">
-              <button class="mini-btn" data-action="edit-nonflash" data-index="${index}">Edit</button>
+              <button class="mini-btn" data-action="edit-nonflash" data-index="${index}">${isFactoryDefaultNonFlashEdit(row) ? 'Edit Default' : 'Edit'}</button>
             </div>
           </td>
         </tr>
@@ -438,7 +456,7 @@
           lendingToken: row.lendingToken,
           flashLoanFeeRate: row.flashLoanFeeRate,
           slippage: row.slippage,
-          nonFlashLoanParams: cloneNonFlashParams(row.nonFlashLoanParams),
+          defaultNonFlashLoanParams: cloneNonFlashParams(row.oracleDefaultNonFlashLoanParams || row.nonFlashLoanParams),
           tokenSymbols: []
         });
       }
@@ -500,7 +518,11 @@
             </div>
             <div class="metric-row">
               <span class="metric-label">Wait Time</span>
-              <span class="metric-value">${formatDaysFromSeconds(row.nonFlashLoanParams.waitTime)}</span>
+              <span class="metric-value">${formatDaysFromSeconds(row.defaultNonFlashLoanParams.waitTime)}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Borrow Rate</span>
+              <span class="metric-value">${formatRate(row.defaultNonFlashLoanParams.borrowRate)}</span>
             </div>
           </div>
         </td>
@@ -512,7 +534,10 @@
           </div>
         </td>
         <td>
-          <button class="mini-btn" data-action="register-jr" data-oracle-index="${index}">Create JR</button>
+          <div class="cell-actions">
+            <button class="mini-btn" data-action="edit-oracle-nonflash" data-oracle-index="${index}">Edit Default</button>
+            <button class="mini-btn" data-action="register-jr" data-oracle-index="${index}">Create JR</button>
+          </div>
         </td>
       </tr>
     `).join('');
@@ -530,14 +555,13 @@
   function applyEnvironmentCapabilities() {
     const env = currentEnv();
     const hasJrPricing = env.hasJrPricing === true;
-    const hasBondify = env.hasBondify === true;
     const createOracleBtn = document.getElementById('btn-create-oracle');
 
     if (createOracleBtn) {
-      const disabled = !hasJrPricing || !hasBondify;
+      const disabled = !hasJrPricing;
       createOracleBtn.disabled = disabled;
       createOracleBtn.title = disabled
-        ? (!hasJrPricing ? 'JR Pricing factory is not configured for the current environment' : 'Bondify principal converters are not fully configured for the current environment')
+        ? 'JR Pricing factory is not configured for the current environment'
         : '';
     }
   }
@@ -623,6 +647,7 @@
         marketAdjustment: cfg.marketAdjustment,
         hasCustomParams: !!cfg.hasCustomParams,
         customParams: cloneNonFlashParams(cfg.customParams),
+        oracleDefaultNonFlashLoanParams: cloneNonFlashParams(oracleCfg.nonFlashLoanParams),
         flashLoanFeeRate: oracleCfg.flashLoanFeeRate,
         slippage,
         borrowRate,
@@ -876,7 +901,8 @@
       exitPriceMap.set(item.jrToken, fallbackExitResults[index]);
     });
 
-    return jrTokens.map((jrToken, index) => {
+    const factory = getFactory(factoryAddress);
+    return Promise.all(jrTokens.map(async (jrToken, index) => {
       const symbol = symbols[index] || 'UNKNOWN';
       const oracleAddr = oracleAddrs[index];
       const oracleInfo = oracleInfoMap.get(oracleAddr);
@@ -887,7 +913,7 @@
       }
       const exitPrice = exitPriceMap.get(jrToken);
       if (!oracleInfo?.config || oracleInfo.slippage == null || !tokenInfo?.config || !tokenInfo.nonFlashLoanParams || tokenInfo.borrowRate == null || tokenInfo.spotPrice == null || exitPrice == null) {
-        return { jrToken, symbol, error: 'Failed to load oracle state' };
+        return loadRow(factory, jrToken);
       }
 
       return {
@@ -913,6 +939,7 @@
         marketAdjustment: tokenInfo.config.marketAdjustment,
         hasCustomParams: !!tokenInfo.config.hasCustomParams,
         customParams: cloneNonFlashParams(tokenInfo.config.customParams),
+        oracleDefaultNonFlashLoanParams: cloneNonFlashParams(oracleInfo.config.nonFlashLoanParams),
         flashLoanFeeRate: oracleInfo.config.flashLoanFeeRate,
         slippage: oracleInfo.slippage,
         borrowRate: tokenInfo.borrowRate,
@@ -920,7 +947,7 @@
         spotPrice: tokenInfo.spotPrice,
         exitPrice
       };
-    });
+    }));
   }
 
   async function refresh() {
@@ -1024,9 +1051,24 @@
     return nextRow;
   }
 
+  function currentWalletAddress() {
+    const walletState = window.environment?.getWalletState?.() || null;
+    return COMMON.isAddress(walletState?.address) ? ethers.utils.getAddress(walletState.address) : '';
+  }
+
+  function signerMismatchMessage(requiredAddress, label = 'admin') {
+    const walletAddress = currentWalletAddress();
+    if (!COMMON.isAddress(requiredAddress) || !COMMON.isAddress(walletAddress)) return '';
+    if (walletAddress.toLowerCase() === requiredAddress.toLowerCase()) return '';
+    return `Connected wallet ${shortAddress(walletAddress)} does not match the required ${label} ${shortAddress(requiredAddress)}. Connect the matching wallet or disconnect the current wallet first.`;
+  }
+
   async function resolvePrivilegedSigner(address, options = {}) {
     const signer = await COMMON.resolveSigner(address, options);
     if (signer) return signer;
+
+    const mismatch = signerMismatchMessage(address, options?.label || 'admin');
+    if (mismatch) throw new Error(mismatch);
 
     const isProduction = !!window.environment?.getAllParams?.().isProduction;
     if (isProduction) {
@@ -1043,7 +1085,8 @@
 
     const signer = await resolvePrivilegedSigner(row.operator, {
       requireAdmin: true,
-      contractAddress: row.oracle
+      contractAddress: row.oracle,
+      label: 'oracle operator/admin'
     });
     return await executor(signer);
   }
@@ -1055,7 +1098,8 @@
 
     const signer = await resolvePrivilegedSigner(row.fakeOracleOwner, {
       preferredAddress: row.fakeOracleOwner,
-      contractAddress: row.fakeOracle
+      contractAddress: row.fakeOracle,
+      label: 'fake oracle owner'
     });
     return await executor(new ethers.Contract(row.fakeOracle, FAKE_ORACLE_ABI, signer));
   }
@@ -1070,7 +1114,7 @@
     const body = document.getElementById('edit-modal-body');
 
     if ((type === 'token-config' || type === 'oracle-rates' || type === 'nonflash') && !row) return;
-    if (type === 'register-jr' && !oracleRow) return;
+    if ((type === 'register-jr' || type === 'oracle-nonflash') && !oracleRow) return;
 
     if (type === 'token-config') {
       title.textContent = `Edit JR Token Config · ${row.symbol}`;
@@ -1121,10 +1165,22 @@
     }
 
     if (type === 'nonflash') {
-      const params = row.nonFlashLoanParams || emptyNonFlashParams();
-      title.textContent = `Edit Non-Flash Params · ${row.symbol}`;
+      const params = getRowEditableNonFlashParams(row);
+      const editingDefault = isFactoryDefaultNonFlashEdit(row);
+      const warningHtml = editingDefault && row.hasCustomParams
+        ? `<div class="modal-form-item full-width"><p class="modal-hint">This JR token currently uses a token-level custom override. Updating the oracle default will not change this row until that override is changed or removed.</p></div>`
+        : '';
+      title.textContent = editingDefault
+        ? `Edit Oracle Default Non-Flash Params · ${row.symbol}`
+        : `Edit Non-Flash Params · ${row.symbol}`;
       body.innerHTML = `
         <div class="modal-form-grid">
+          <div class="modal-form-item full-width">
+            <p class="modal-hint">${editingDefault
+              ? 'Non-Flash Params are updated through <code>setOracleDefaultNonFlashLoanParams</code> on the factory so pair defaults stay editable without oracle-direct role management.'
+              : 'Leave zero address to use the inline borrow rate value.'}</p>
+          </div>
+          ${warningHtml}
           <div class="modal-form-item">
             <label>Wait Time (days)</label>
             <input id="modal-wait-time" type="number" min="0" step="0.25" value="${escapeHtml((Number(params.waitTime || 0) / 86400).toString())}">
@@ -1144,7 +1200,39 @@
           <div class="modal-form-item full-width">
             <label>Borrow Rate Strategy</label>
             <input id="modal-borrow-strategy" type="text" value="${escapeHtml(params.borrowRateStrategy || ZERO_ADDRESS)}" placeholder="0x0000000000000000000000000000000000000000">
-            <p class="modal-hint">Leave zero address to use the inline borrow rate value.</p>
+            ${editingDefault ? '' : '<p class="modal-hint">Leave zero address to use the inline borrow rate value.</p>'}
+          </div>
+        </div>
+      `;
+    }
+
+    if (type === 'oracle-nonflash') {
+      const params = cloneNonFlashParams(oracleRow.defaultNonFlashLoanParams);
+      title.textContent = `Edit Oracle Default Non-Flash Params · ${shortAddress(oracleRow.oracle)}`;
+      body.innerHTML = `
+        <div class="modal-form-grid">
+          <div class="modal-form-item full-width">
+            <p class="modal-hint">This updates the pair-level default through <code>factory.setOracleDefaultNonFlashLoanParams(collateral,lending,...)</code>.</p>
+          </div>
+          <div class="modal-form-item">
+            <label>Wait Time (days)</label>
+            <input id="modal-wait-time" type="number" min="0" step="0.25" value="${escapeHtml((Number(params.waitTime || 0) / 86400).toString())}">
+          </div>
+          <div class="modal-form-item">
+            <label>Borrow Rate (%)</label>
+            <input id="modal-borrow-rate" type="number" step="0.5" value="${escapeHtml(rateToPercentString(params.borrowRate))}">
+          </div>
+          <div class="modal-form-item">
+            <label>Risk Free Rate (%)</label>
+            <input id="modal-risk-free-rate" type="number" step="0.5" value="${escapeHtml(rateToPercentString(params.riskFreeRate))}">
+          </div>
+          <div class="modal-form-item">
+            <label>Waiting Period Risk (%)</label>
+            <input id="modal-waiting-risk" type="number" step="0.5" value="${escapeHtml(rateToPercentString(params.waitingPeriodRisk))}">
+          </div>
+          <div class="modal-form-item full-width">
+            <label>Borrow Rate Strategy</label>
+            <input id="modal-borrow-strategy" type="text" value="${escapeHtml(params.borrowRateStrategy || ZERO_ADDRESS)}" placeholder="0x0000000000000000000000000000000000000000">
           </div>
         </div>
       `;
@@ -1178,11 +1266,6 @@
           <div class="modal-form-item full-width">
             <label>Slippage Provider</label>
             <input id="modal-create-slippage-provider" type="text" value="${ZERO_ADDRESS}">
-          </div>
-          <div class="modal-form-item full-width">
-            <label>Bondify Source Registry</label>
-            <input type="text" value="PCS + Aave + Morpho fixed front-end addresses" disabled>
-            <p class="modal-hint">This action uses the three Bondify principal converter addresses configured on the Environment page.</p>
           </div>
           <div class="modal-form-item">
             <label>Wait Time (days)</label>
@@ -1273,7 +1356,8 @@
     }
     const signer = await resolvePrivilegedSigner(state.factoryActor, {
       requireAdmin: true,
-      contractAddress: getFactoryAddress()
+      contractAddress: getFactoryAddress(),
+      label: 'factory operator/admin'
     });
     return await executor(signer);
   }
@@ -1283,87 +1367,86 @@
     const row = rowIndex >= 0 ? state.rows[rowIndex] : null;
     const oracleRow = oracleIndex >= 0 ? state.oracles[oracleIndex] : null;
     if ((type === 'token-config' || type === 'oracle-rates' || type === 'nonflash') && !row) return;
-    if (type === 'register-jr' && !oracleRow) return;
+    if ((type === 'register-jr' || type === 'oracle-nonflash') && !oracleRow) return;
 
     const submitButton = document.getElementById('edit-modal-submit');
     submitButton.disabled = true;
 
     try {
       if (type === 'token-config' || type === 'oracle-rates' || type === 'nonflash') {
-        await runAsOperator(row, async (signer) => {
-          const oracle = getOracle(row.oracle, signer);
-
-          if (type === 'token-config') {
-            const exitType = Number(document.getElementById('modal-exit-type').value);
-            const params = row.hasCustomParams ? cloneNonFlashParams(row.customParams) : emptyNonFlashParams();
-            const tx = await oracle.supportJrToken(row.jrToken, exitType, row.marketAdjustment, params);
+        if (type === 'nonflash') {
+          const params = readNonFlashParamsFromModal();
+          await runAsFactoryActor(async (signer) => {
+            const factory = new ethers.Contract(getFactoryAddress(), FACTORY_ABI, signer);
+            const tx = await factory.setOracleDefaultNonFlashLoanParams(row.collateralToken, row.lendingToken, params);
             await tx.wait();
+          });
+        } else {
+          await runAsOperator(row, async (signer) => {
+            const oracle = getOracle(row.oracle, signer);
 
-            const fakeOracleInput = document.getElementById('modal-token-fake-oracle-price');
-            const fakeOracleValue = fakeOracleInput ? String(fakeOracleInput.value || '').trim() : '';
-            if (fakeOracleValue && row.bondifyOracleSettable) {
-              await runAsFakeOracleOwner(row, async (fakeOracle) => {
-                const tx3 = await fakeOracle.setPrice(row.collateralToken, ethers.utils.parseUnits(fakeOracleValue, 18));
-                await tx3.wait();
-              });
+            if (type === 'token-config') {
+              const exitType = Number(document.getElementById('modal-exit-type').value);
+              const params = row.hasCustomParams ? cloneNonFlashParams(row.customParams) : emptyNonFlashParams();
+              const tx = await oracle.supportJrToken(row.jrToken, exitType, row.marketAdjustment, params);
+              await tx.wait();
+
+              const fakeOracleInput = document.getElementById('modal-token-fake-oracle-price');
+              const fakeOracleValue = fakeOracleInput ? String(fakeOracleInput.value || '').trim() : '';
+              if (fakeOracleValue && row.bondifyOracleSettable) {
+                await runAsFakeOracleOwner(row, async (fakeOracle) => {
+                  const tx3 = await fakeOracle.setPrice(row.collateralToken, ethers.utils.parseUnits(fakeOracleValue, 18));
+                  await tx3.wait();
+                });
+              }
             }
-          }
 
-          if (type === 'oracle-rates') {
-            const flashFee = percentToRate(document.getElementById('modal-flash-fee').value);
-            const slippage = percentToRate(document.getElementById('modal-slippage').value);
-            const marketAdjustment = Math.round(Number(document.getElementById('modal-market-adjustment').value || '0') * 10000);
-            const tx1 = await oracle.setFlashLoanFeeRate(flashFee);
-            await tx1.wait();
-            const tx2 = await oracle.setSlippage(slippage);
-            await tx2.wait();
-            const tx3 = await oracle.setJrTokenMarketAdjustment(row.jrToken, marketAdjustment);
-            await tx3.wait();
-          }
-
-          if (type === 'nonflash') {
-            const strategyInput = document.getElementById('modal-borrow-strategy').value.trim();
-            const params = {
-              waitTime: daysToSeconds(document.getElementById('modal-wait-time').value),
-              borrowRate: percentToRate(document.getElementById('modal-borrow-rate').value),
-              borrowRateStrategy: COMMON.isAddress(strategyInput) ? ethers.utils.getAddress(strategyInput) : ZERO_ADDRESS,
-              riskFreeRate: percentToRate(document.getElementById('modal-risk-free-rate').value),
-              waitingPeriodRisk: percentToRate(document.getElementById('modal-waiting-risk').value)
-            };
-            const tx = await oracle.setJrTokenNonFlashLoanParams(row.jrToken, params);
-            await tx.wait();
-          }
-        });
+            if (type === 'oracle-rates') {
+              const flashFee = percentToRate(document.getElementById('modal-flash-fee').value);
+              const slippage = percentToRate(document.getElementById('modal-slippage').value);
+              const marketAdjustment = Math.round(Number(document.getElementById('modal-market-adjustment').value || '0') * 10000);
+              const tx1 = await oracle.setFlashLoanFeeRate(flashFee);
+              await tx1.wait();
+              const tx2 = await oracle.setSlippage(slippage);
+              await tx2.wait();
+              const tx3 = await oracle.setJrTokenMarketAdjustment(row.jrToken, marketAdjustment);
+              await tx3.wait();
+            }
+          });
+        }
 
         COMMON.showToast?.('JR pricing parameter updated');
         closeModal();
-        await refreshRow(rowIndex);
+        if (type === 'nonflash') {
+          await refresh();
+        } else {
+          await refreshRow(rowIndex);
+        }
+      }
+
+      if (type === 'oracle-nonflash') {
+        const params = readNonFlashParamsFromModal();
+        await runAsFactoryActor(async (signer) => {
+          const factory = new ethers.Contract(getFactoryAddress(), FACTORY_ABI, signer);
+          const tx = await factory.setOracleDefaultNonFlashLoanParams(oracleRow.collateralToken, oracleRow.lendingToken, params);
+          await tx.wait();
+        });
+        COMMON.showToast?.('Oracle default non-flash params updated');
+        closeModal();
+        await refresh();
       }
 
       if (type === 'create-oracle') {
         await runAsFactoryActor(async (signer) => {
           const factory = new ethers.Contract(getFactoryAddress(), FACTORY_ABI, signer);
-          const principalConverterSplit = getPrincipalConverterSplitAddress();
-          const aavePrincipalConverter = getAavePrincipalConverterAddress();
-          const morphoPrincipalConverter = getMorphoPrincipalConverterAddress();
-
-          if (!COMMON.isAddress(principalConverterSplit)) {
-            throw new Error('Bondify PrincipalConverterSplit address is missing from the current environment');
-          }
-          if (!COMMON.isAddress(aavePrincipalConverter)) {
-            throw new Error('Bondify Aave Principal Converter address is missing from the current environment');
-          }
-          if (!COMMON.isAddress(morphoPrincipalConverter)) {
-            throw new Error('Bondify Morpho Principal Converter address is missing from the current environment');
-          }
 
           const config = {
             spotOracle: addressOrZero(document.getElementById('modal-create-spot-oracle').value.trim()),
             collateralToken: ethers.utils.getAddress(document.getElementById('modal-create-collateral').value.trim()),
             lendingToken: ethers.utils.getAddress(document.getElementById('modal-create-lending').value.trim()),
-            principalConverterSplit,
-            aavePrincipalConverter,
-            morphoPrincipalConverter,
+            principalConverterSplit: ZERO_ADDRESS,
+            aavePrincipalConverter: ZERO_ADDRESS,
+            morphoPrincipalConverter: ZERO_ADDRESS,
             flashLoanFeeRate: percentToRate(document.getElementById('modal-create-flash-fee').value),
             slippage: percentToRate(document.getElementById('modal-create-slippage').value),
             slippageProvider: addressOrZero(document.getElementById('modal-create-slippage-provider').value.trim()),
@@ -1385,7 +1468,7 @@
             lendingToken: config.lendingToken,
             flashLoanFeeRate: config.flashLoanFeeRate,
             slippage: config.slippage,
-            nonFlashLoanParams: cloneNonFlashParams(config.nonFlashLoanParams),
+            defaultNonFlashLoanParams: cloneNonFlashParams(config.nonFlashLoanParams),
             tokenSymbols: [],
             tokenCount: 0
           });
@@ -1422,7 +1505,9 @@
       }
     } catch (error) {
       console.error('[jr-pricing] update failed', error);
-      setStatus(`Update failed: ${error?.message || error}`, 'error');
+      const message = `Update failed: ${error?.message || error}`;
+      setStatus(message, 'error');
+      COMMON.showToast?.(message);
     } finally {
       submitButton.disabled = false;
     }
@@ -1461,9 +1546,11 @@
       if (!button) return;
       const action = button.getAttribute('data-action');
 
-      if (action === 'register-jr') {
+      if (action === 'register-jr' || action === 'edit-oracle-nonflash') {
         const oracleIndex = Number(button.getAttribute('data-oracle-index'));
-        if (Number.isFinite(oracleIndex)) openModal('register-jr', -1, oracleIndex);
+        if (Number.isFinite(oracleIndex)) {
+          openModal(action === 'register-jr' ? 'register-jr' : 'oracle-nonflash', -1, oracleIndex);
+        }
         return;
       }
 

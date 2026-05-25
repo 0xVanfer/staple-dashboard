@@ -64,7 +64,8 @@ Whether a page is actually usable depends on the current RPC, Address Provider, 
 
 - **RPC** only determines where requests are sent
 - **Staple addresses** are resolved from the saved `Version / Address Provider`
-- **Bondify / JR Pricing** use manual per-environment addresses managed from the Environment page
+- **JR Pricing Factory** is also bound to the selected Staple version
+- JR Pricing writes for pair-level default **Non-Flash Params** now go through the configured factory (`setOracleDefaultNonFlashLoanParams`) in both production and test environments, so operators can update defaults without relying on direct oracle roles
 - The dashboard must continue working even when production environments do not expose a `Test Token Factory`
 
 ## Wallets and Signing

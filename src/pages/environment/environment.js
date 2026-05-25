@@ -608,26 +608,11 @@
   }
 
   const SECTIONS = {
-    bondify: {
-      label: 'Bondify',
-      modes: ['fixed'],
-      keys: [
-        { key: 'bondify_principalConverterSplit', label: 'PCS (PrincipalConverterSplit)' },
-        { key: 'bondify_aavePrincipalConverter', label: 'Aave Principal Converter' },
-        { key: 'bondify_morphoPrincipalConverter', label: 'Morpho Principal Converter' }
-      ]
-    },
-    jrPricing: {
-      label: 'Jr Pricing',
-      modes: ['fixed'],
-      keys: [
-        { key: 'jrPricing_factory', label: 'Factory' }
-      ]
-    },
     staple: {
       label: 'Staple',
       modes: ['address-provider'],
       keys: [
+        { key: 'jrPricing_factory', label: 'JR Pricing Factory' },
         { key: 'staple_controller', label: 'Controller' },
         { key: 'staple_router', label: 'Router' },
         { key: 'staple_priceProvider', label: 'Price Provider' },
@@ -718,12 +703,14 @@
     name: 'Global Environment',
     sections: {
       bondify: { mode: 'fixed', addresses: {} },
-      jrPricing: { mode: 'fixed', addresses: {} },
       staple: { mode: 'address-provider', addresses: {}, versions: [], selectedVersionId: '' }
     }
   };
 
   const CACHE = { POOL: 'staple_cache_pool_v4', SYM: 'staple_cache_sym_v4', TTL_P: 600000, TTL_S: 86400000, THR: 10000 };
+  const STAPLE_UI_POOL_DATA_PROVIDER_ABI = typeof stapleUIPoolDataProviderAbi !== 'undefined'
+    ? stapleUIPoolDataProviderAbi
+    : (Array.isArray(globalThis?.stapleUIPoolDataProviderAbi) ? globalThis.stapleUIPoolDataProviderAbi : null);
 
   let _rpcList = [];
   let _selectedRpcIndex = 0;
@@ -752,7 +739,6 @@
   let _rpcLoadSeq = 0;
   let _rpcEditorState = { mode: 'create', id: '' };
   let _versionEditorState = { mode: 'create', id: '' };
-  let _addressEditorState = { secId: '', key: '' };
   let _userEditorState = { mode: 'create', address: '' };
   let _readyResolve = null;
   let _readyPromise = new Promise((resolve) => { _readyResolve = resolve; });
@@ -1899,14 +1885,16 @@
   }
 
   function normalizeStapleVersionEntry(raw, fallbackIndex = 0) {
-    const version = String(raw?.version || raw?.deployVersion || raw?.label || '').trim();
-    const addressProvider = normAddr(raw?.addressProvider || raw?.provider || raw?.coreAddressProvider || raw?.peripheryAddressProvider || '');
+    const version = String(raw?.version || '').trim();
+    const addressProvider = normAddr(raw?.addressProvider || '');
+    const jrPricingFactory = normAddr(raw?.jrPricingFactory || '');
     const label = String(raw?.label || version || `Version ${fallbackIndex + 1}`).trim();
     return {
       id: String(raw?.id || makeVersionId('ver')),
       label,
       version,
-      addressProvider
+      addressProvider,
+      jrPricingFactory
     };
   }
 
@@ -2232,19 +2220,10 @@
     next.addresses = sanitizeSectionAddresses(secId, next.addresses || {});
     if (secId === 'staple') {
       next.addresses = {};
-      let versions = Array.isArray(next.versions) ? next.versions : [];
-      if (!versions.length && next.addressProvider) {
-        versions = [{
-          id: makeVersionId('ver'),
-          label: String(next.stapleVersion || next.version || 'Imported Version').trim() || 'Imported Version',
-          version: String(next.stapleVersion || next.version || '').trim(),
-          addressProvider: normAddr(next.addressProvider || '')
-        }];
-      }
-      next.versions = versions
+      next.versions = (Array.isArray(next.versions) ? next.versions : [])
         .map((entry, index) => normalizeStapleVersionEntry(entry, index))
-        .filter((entry) => entry.version || entry.addressProvider);
-      next.selectedVersionId = String(next.selectedVersionId || next.activeVersionId || next.selectedVersion || '').trim();
+        .filter((entry) => entry.version || entry.addressProvider || entry.jrPricingFactory);
+      next.selectedVersionId = String(next.selectedVersionId || '').trim();
       if (!next.selectedVersionId && next.versions.length) next.selectedVersionId = next.versions[0].id;
     }
     return next;
@@ -2309,37 +2288,6 @@
     return stapleVersions().find((entry) => entry.id === _versionEditorState.id) || null;
   }
 
-  function setAddressEditorState(secId = '', key = '') {
-    _addressEditorState = { secId: secId || '', key: key || '' };
-  }
-
-  function currentAddressEditorEntry() {
-    const secId = String(_addressEditorState.secId || '');
-    const key = String(_addressEditorState.key || '');
-    if (!secId || !key) return null;
-    const sec = SECTIONS[secId];
-    const item = sec?.keys?.find((entry) => entry.key === key);
-    if (!item) return null;
-    return {
-      secId,
-      key,
-      label: item.label,
-      sectionLabel: sec.label,
-      value: sectionAddresses(secId)[key] || ''
-    };
-  }
-
-  function setManualSectionAddress(secId, key, value) {
-    const next = normalizeRpcConfig(deepClone(currentEnvConfig()));
-    const addresses = Object.assign({}, next.sections?.[secId]?.addresses || {});
-    const normalized = normAddr(String(value || '').trim());
-    if (normalized) addresses[key] = normalized;
-    else delete addresses[key];
-    next.sections[secId] = normalizeSectionConfig(secId, Object.assign({}, next.sections?.[secId] || {}, { addresses }));
-    _envConfig = next;
-    persist();
-  }
-
   function setUserEditorState(mode = 'create', address = '') {
     _userEditorState = { mode, address: address || '' };
   }
@@ -2379,6 +2327,10 @@
     return normAddr(activeStapleVersion()?.addressProvider || '');
   }
 
+  function sectionJrPricingFactory() {
+    return normAddr(activeStapleVersion()?.jrPricingFactory || '');
+  }
+
   function discoveryCacheKey(rpcId, providerAddr) {
     return `${rpcId}::${String(providerAddr || '').toLowerCase()}`;
   }
@@ -2395,6 +2347,10 @@
     if (!secId) return { value: '', source: 'blank' };
 
     if (secId === 'staple') {
+      if (key === 'jrPricing_factory') {
+        const value = sectionJrPricingFactory();
+        return { value, source: value ? 'version' : 'blank' };
+      }
       if (_currentDiscovery?.addresses?.[key]) return { value: _currentDiscovery.addresses[key], source: 'provider' };
       return { value: '', source: 'blank' };
     }
@@ -2419,12 +2375,11 @@
     } else {
       parts.push('No Address Provider selected');
     }
-
-    ['bondify', 'jrPricing'].forEach((secId) => {
-      const label = SECTIONS[secId]?.label || secId;
-      const configuredCount = (SECTIONS[secId]?.keys || []).filter((item) => isAddr(sectionAddresses(secId)[item.key])).length;
-      parts.push(`${label} manual addresses ${configuredCount}/${SECTIONS[secId]?.keys?.length || 0}`);
-    });
+    if (isAddr(sectionJrPricingFactory())) {
+      parts.push(`JR Pricing Factory ${shorten(sectionJrPricingFactory())}`);
+    } else {
+      parts.push('No JR Pricing Factory selected');
+    }
 
     return cfg.name ? `${cfg.name} · ${parts.join(' · ')}` : parts.join(' · ');
   }
@@ -2593,6 +2548,8 @@
     const cacheKey = discoveryCacheKey(rpcId, providerAddr);
     const discovery = _discoveryCache[cacheKey];
     const relatedAddresses = new Set([providerAddr.toLowerCase()]);
+    const versionFactory = normAddr(versionEntry?.jrPricingFactory || '');
+    if (isAddr(versionFactory)) relatedAddresses.add(versionFactory.toLowerCase());
 
     Object.values(discovery?.addresses || {}).forEach((address) => {
       const normalized = normAddr(address);
@@ -2848,8 +2805,14 @@
       return;
     }
     try {
+      if (!STAPLE_UI_POOL_DATA_PROVIDER_ABI) {
+        console.error('pool', new ReferenceError('stapleUIPoolDataProviderAbi is not defined'));
+        _envRefreshing = false;
+        render();
+        return;
+      }
       if (!_uiPoolContract || _uiPoolContract.address.toLowerCase() !== addr.toLowerCase()) {
-        _uiPoolContract = new ethers.Contract(addr, stapleUIPoolDataProviderAbi, _provider);
+        _uiPoolContract = new ethers.Contract(addr, STAPLE_UI_POOL_DATA_PROVIDER_ABI, _provider);
       }
       const u = effectiveCurrentUserAddress() || ethers.constants.AddressZero;
       const o = u !== ethers.constants.AddressZero ? { from: u } : {};
@@ -2969,11 +2932,6 @@
   function getAllParams() {
     const adminActor = currentAdminActor();
     const stapleVersion = activeStapleVersion();
-    const bondifyConfigured = [
-      resolveAddress('bondify_principalConverterSplit'),
-      resolveAddress('bondify_aavePrincipalConverter'),
-      resolveAddress('bondify_morphoPrincipalConverter')
-    ].every((value) => isAddr(value));
     const jrPricingConfigured = isAddr(resolveAddress('jrPricing_factory'));
     return {
       currentNetworkName: currentRpcName(),
@@ -2989,10 +2947,6 @@
       stapleVersion: stapleVersion?.version || stapleVersion?.label || '',
       stapleAddressProvider: sectionAddressProvider(),
       jrPricingFactory: resolveAddress('jrPricing_factory'),
-
-      bondifyPrincipalConverterSplit: resolveAddress('bondify_principalConverterSplit'),
-      bondifyAavePrincipalConverter: resolveAddress('bondify_aavePrincipalConverter'),
-      bondifyMorphoPrincipalConverter: resolveAddress('bondify_morphoPrincipalConverter'),
 
       poolImpl: resolveAddress('staple_poolImpl'),
       stapleVerifier: resolveAddress('staple_oracleVerifierStaple'),
@@ -3025,7 +2979,6 @@
       walletChainId: _walletState.chainId || 0,
       walletMatchesRpc: walletMatchesCurrentRpc(),
 
-      hasBondify: bondifyConfigured,
       hasJrPricing: jrPricingConfigured,
       hasStaple: isAddr(sectionAddressProvider())
     };
@@ -3280,13 +3233,12 @@
         const meta = resolveAddressMeta(item.key);
         const sourceBadge = meta.source === 'provider'
           ? '<span class="override-badge">provider</span>'
-          : meta.source === 'manual'
-            ? '<span class="override-badge">manual</span>'
-            : '<span class="override-badge">blank</span>';
-        const actionButton = secId === 'staple'
-          ? ''
-          : `<button class="btn btn-sm btn-secondary" data-edit-address="${esc(secId)}::${esc(item.key)}">Modify</button>`;
-        h += `<div class="addr-row ${meta.source === 'manual' || meta.source === 'provider' ? 'overridden' : ''}"><span class="addr-label">${esc(item.label)}</span><span class="addr-value mono">${esc(meta.value || '—')}</span>${sourceBadge}${meta.value ? `<button class="btn-icon copy-btn" data-copy-address="${esc(meta.value)}">📋</button>` : ''}${actionButton}</div>`;
+          : meta.source === 'version'
+            ? '<span class="override-badge">version</span>'
+            : meta.source === 'manual'
+              ? '<span class="override-badge">manual</span>'
+              : '<span class="override-badge">blank</span>';
+        h += `<div class="addr-row ${meta.source === 'manual' || meta.source === 'provider' ? 'overridden' : ''}"><span class="addr-label">${esc(item.label)}</span><span class="addr-value mono">${esc(meta.value || '—')}</span>${sourceBadge}${meta.value ? `<button class="btn-icon copy-btn" data-copy-address="${esc(meta.value)}">📋</button>` : ''}</div>`;
       });
       h += '</div></div>';
     });
@@ -3302,12 +3254,6 @@
         }
       });
     });
-    c.querySelectorAll('[data-edit-address]').forEach((btn) => btn.addEventListener('click', () => {
-      const raw = String(btn.getAttribute('data-edit-address') || '');
-      const [secId, key] = raw.split('::');
-      setAddressEditorState(secId || '', key || '');
-      renderOverridePanel();
-    }));
   }
 
   function renderOverridePanel() {
@@ -3345,7 +3291,8 @@
     h += '<div class="form-grid vertical-form">';
     h += `<div class="form-item"><label>Version or Salt</label><input id="staple-version-name" class="form-control" value="${esc(editingVersion?.version || editingVersion?.label || '')}" placeholder="e.g. 260428-sepolia-01"></div>`;
     h += `<div class="form-item"><label>Address Provider</label><input id="staple-version-provider" class="form-control mono" value="${esc(editingVersion?.addressProvider || '')}" placeholder="0x..."></div>`;
-    h += `<div class="form-item"><div class="helper-text">Only Staple version and Address Provider live here. RPC transport settings stay in the RPC workspace above.</div></div>`;
+    h += `<div class="form-item"><label>JR Pricing Factory</label><input id="staple-version-jr-factory" class="form-control mono" value="${esc(editingVersion?.jrPricingFactory || '')}" placeholder="0x..."></div>`;
+    h += `<div class="form-item"><div class="helper-text">Staple version bindings live here: version label, Address Provider, and JR Pricing Factory. RPC transport settings stay in the RPC workspace above.</div></div>`;
     h += '<div class="form-actions">';
     h += `<button id="btn-save-staple-version" class="btn btn-primary">${isEdit ? 'Save Version' : 'Add Version'}</button>`;
     h += '<button id="btn-new-staple-version" class="btn btn-secondary">New Draft</button>';
@@ -3354,20 +3301,6 @@
     h += '</div>';
     h += '</div></div>';
 
-    const editingAddress = currentAddressEditorEntry();
-    h += '<div class="registry-section-card registry-editor-card">';
-    h += '<h3>Bondify / Jr Pricing Address Editor</h3>';
-    h += '<p class="section-desc">These addresses are now manual per-environment inputs. Click Modify beside any Bondify or Jr Pricing address in the browser below.</p>';
-    h += '<div class="form-grid vertical-form">';
-    h += `<div class="form-item"><label>Section</label><input id="manual-address-section" class="form-control" value="${esc(editingAddress?.sectionLabel || '')}" placeholder="Click Modify on a row below" disabled></div>`;
-    h += `<div class="form-item"><label>Address Item</label><input id="manual-address-label" class="form-control" value="${esc(editingAddress?.label || '')}" placeholder="Click Modify on a row below" disabled></div>`;
-    h += `<div class="form-item"><label>Address</label><input id="manual-address-value" class="form-control mono" value="${esc(editingAddress?.value || '')}" placeholder="0x... or leave blank to clear" ${editingAddress ? '' : 'disabled'}></div>`;
-    h += '<div class="form-actions">';
-    h += `<button id="btn-save-manual-address" class="btn btn-primary" ${editingAddress ? '' : 'disabled'}>Save Address</button>`;
-    h += `<button id="btn-clear-manual-address" class="btn btn-danger" ${editingAddress ? '' : 'disabled'}>Clear Address</button>`;
-    h += `<button id="btn-cancel-manual-address" class="btn btn-secondary" ${editingAddress ? '' : 'disabled'}>Cancel</button>`;
-    h += '</div>';
-    h += '</div></div>';
     c.innerHTML = h;
 
     c.querySelectorAll('[data-select-staple-version]').forEach((btn) => btn.addEventListener('click', async () => {
@@ -3436,45 +3369,18 @@
       }
     });
 
-    const saveManualAddressButton = document.getElementById('btn-save-manual-address');
-    if (saveManualAddressButton) saveManualAddressButton.addEventListener('click', () => {
-      const editing = currentAddressEditorEntry();
-      const input = document.getElementById('manual-address-value');
-      if (!editing || !input) return;
-      try {
-        const nextValue = String(input.value || '').trim();
-        if (nextValue && !isAddr(nextValue)) throw new Error('Address must be a valid 0x address');
-        setManualSectionAddress(editing.secId, editing.key, nextValue);
-        notify(nextValue ? `${editing.label} updated` : `${editing.label} cleared`);
-        render();
-      } catch (error) {
-        notify(error.message || error);
-      }
-    });
-
-    const clearManualAddressButton = document.getElementById('btn-clear-manual-address');
-    if (clearManualAddressButton) clearManualAddressButton.addEventListener('click', () => {
-      const editing = currentAddressEditorEntry();
-      if (!editing) return;
-      setManualSectionAddress(editing.secId, editing.key, '');
-      notify(`${editing.label} cleared`);
-      render();
-    });
-
-    const cancelManualAddressButton = document.getElementById('btn-cancel-manual-address');
-    if (cancelManualAddressButton) cancelManualAddressButton.addEventListener('click', () => {
-      setAddressEditorState('', '');
-      renderOverridePanel();
-    });
   }
 
   async function saveStapleVersionEditor() {
     const versionInput = document.getElementById('staple-version-name');
     const providerInput = document.getElementById('staple-version-provider');
+    const jrPricingFactoryInput = document.getElementById('staple-version-jr-factory');
     const versionText = String(versionInput?.value || '').trim();
     const providerText = normAddr(String(providerInput?.value || '').trim());
+    const jrPricingFactoryText = normAddr(String(jrPricingFactoryInput?.value || '').trim());
     if (!versionText) throw new Error('Version or salt is required');
     if (!isAddr(providerText)) throw new Error('Address Provider must be a valid address');
+    if (!isAddr(jrPricingFactoryText)) throw new Error('JR Pricing Factory must be a valid address');
 
     const discovery = await discoverFromAddressProvider(providerText, _provider);
     if (!discovery?.addresses?.staple_controller) {
@@ -3490,7 +3396,8 @@
       id: _versionEditorState.mode === 'edit' && _versionEditorState.id ? _versionEditorState.id : makeVersionId('ver'),
       label: versionText,
       version: versionText,
-      addressProvider: providerText
+      addressProvider: providerText,
+      jrPricingFactory: jrPricingFactoryText
     }, versions.length);
     const targetIndex = versions.findIndex((item) => item.id === entry.id);
     if (targetIndex >= 0) versions[targetIndex] = entry;
@@ -4197,7 +4104,8 @@
 
   window.addEventListener('storage', () => {
     load();
-    render();
+    hydrateCurrentDiscovery();
+    onRpcChange().catch((error) => console.error(error));
   });
 
   window.environment = {
@@ -4213,8 +4121,7 @@
     getPoolInfo,
     getSymbols,
     getFixedAddresses: () => ({
-      bondify: deepClone(sectionAddresses('bondify')),
-      jrPricing: deepClone(sectionAddresses('jrPricing'))
+      jrPricingFactory: sectionJrPricingFactory()
     }),
     resolveAddress,
     resolveAddressMeta,

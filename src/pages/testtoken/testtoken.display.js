@@ -123,13 +123,38 @@ try {
     root.innerHTML = body;
   }
 
+  function syncTestTokenFactoryActions(factoryAddr) {
+    const hasFactory = !!(factoryAddr && ethers.utils.isAddress(factoryAddr));
+    const mintAllBtn = document.getElementById('btn-mint-all');
+    const createTokenCard = document.getElementById('btn-create-token-card');
+    if (mintAllBtn) {
+      mintAllBtn.disabled = !hasFactory;
+      mintAllBtn.title = hasFactory ? '' : 'Test Token Factory is not configured in Environment';
+    }
+    if (createTokenCard) {
+      createTokenCard.style.opacity = hasFactory ? '' : '0.5';
+      createTokenCard.style.pointerEvents = hasFactory ? '' : 'none';
+      createTokenCard.title = hasFactory ? '' : 'Test Token Factory is not configured in Environment';
+    }
+    return hasFactory;
+  }
+
   // Main refresh: get supported tokens -> deduplicate -> concurrent read metadata / balance / price
   async function refreshTokenTable() {
-    const rpc = environment.getAllParams().rpc;
-    const user = environment.getAllParams().user;
+    const envParams = environment.getAllParams();
+    const rpc = envParams.rpc;
+    const user = envParams.user;
+    const factoryAddr = envParams.testERC20Factory;
+    const hasFactory = syncTestTokenFactoryActions(factoryAddr);
     if (!rpc || !user) {
       console.warn('missing rpc or user');
       renderTokenTable([]);
+      return;
+    }
+    if (!hasFactory) {
+      console.warn('missing test token factory; skip non-test token discovery for testtoken page');
+      renderTokenTable([]);
+      setTableLoading('Test Token Factory not configured');
       return;
     }
 
@@ -704,6 +729,7 @@ try {
   // Page load: Auto execute first refresh
   document.addEventListener('DOMContentLoaded', async () => {
     wire();
+    syncTestTokenFactoryActions(environment.getAllParams().testERC20Factory);
     await refreshEthBalance();
     await refreshTokenTable();
   });

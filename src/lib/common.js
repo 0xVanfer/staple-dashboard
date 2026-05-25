@@ -499,6 +499,11 @@
     // Runtime rule: once a browser wallet is connected, write operations must use that
     // wallet signer. Do not silently fall back to local impersonation.
     if (walletConnected) {
+      const walletAddress = env?.getWalletState ? String(env.getWalletState()?.address || '') : '';
+      if (requireAdmin && isAddress(addr) && isAddress(walletAddress) && walletAddress.toLowerCase() !== addr.toLowerCase()) {
+        console.warn(`Connected browser wallet ${walletAddress} does not match required admin ${addr}.`);
+        return null;
+      }
       try {
         const walletSigner = env?.getConnectedWalletSigner ? env.getConnectedWalletSigner() : null;
         if (walletSigner) return walletSigner;

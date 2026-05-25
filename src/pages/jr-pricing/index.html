@@ -18,7 +18,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.8.0/dist/ethers.umd.min.js"></script>
   <script src="../../lib/ledgerDirect.bundle.js?v=20260522c"></script>
-  <script src="../environment/environment.js?v=20260522d" defer></script>
+  <script src="../environment/environment.js?v=20260525a" defer></script>
   <script src="./jr-pricing.js" defer></script>
 
   <link rel="stylesheet" href="./jr-pricing.css">
@@ -28,7 +28,7 @@
     <div class="jr-header">
       <div>
         <h1>JR Pricing</h1>
-        <p class="header-desc">Factory comes from Environment settings. JR spot is the live preview NAV from Bondify <code>previewPrice</code>, while market adjustment only affects the final exit price as an additive spot-based adjustment. Use the token list tab for per-token controls and the oracle management tab for pair-level creation and JR registration.</p>
+        <p class="header-desc">Factory comes from Environment settings. JR spot is the live preview NAV from Bondify <code>previewPrice</code>, while market adjustment only affects the final exit price as an additive spot-based adjustment. Use the token list tab for token config, oracle rate checks, and quick default Non-Flash edits; use the oracle management tab for pair-level creation, default parameter editing, and JR registration.</p>
       </div>
       <div class="header-actions">
         <button id="btn-refresh" class="btn-primary">Refresh</button>
@@ -47,7 +47,7 @@
         <div class="section-header">
           <div>
             <h2>JR Token List</h2>
-            <p class="section-subtitle">Address and symbol are grouped together. Per-token pricing parameters can still be edited from this list.</p>
+            <p class="section-subtitle">Address and symbol are grouped together. Token config and oracle-rate updates stay here, while Non-Flash edits now update the pair default through the factory.</p>
           </div>
         </div>
 
@@ -76,7 +76,7 @@
         <div class="section-header">
           <div>
             <h2>Oracle Management</h2>
-            <p class="section-subtitle">Manage pair-level oracles and register new JR tokens under an existing oracle. Oracle rows are derived from the current factory registry and progressively rendered.</p>
+            <p class="section-subtitle">Manage pair-level oracles, edit oracle default non-flash params, and register new JR tokens under an existing oracle. Oracle rows are derived from the current factory registry and progressively rendered.</p>
           </div>
           <div class="section-actions">
             <button id="btn-create-oracle" class="btn-secondary">Create Oracle</button>
@@ -89,7 +89,7 @@
               <tr>
                 <th>Oracle</th>
                 <th>Pair</th>
-                <th>Non-Flash Params</th>
+                <th>Oracle Default Non-Flash Params</th>
                 <th>Managed Tokens</th>
                 <th>Actions</th>
               </tr>

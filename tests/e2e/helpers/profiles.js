@@ -5,6 +5,7 @@ const dashboardRoot = path.resolve(__dirname, '..', '..', '..');
 const stapleRoot = path.resolve(process.env.STAPLE_REPO_ROOT || path.join(dashboardRoot, '..', 'staple'));
 const MAINNET_RPC = String(process.env.DASHBOARD_MAINNET_RPC || '').trim();
 const SEPOLIA_RPC = String(process.env.DASHBOARD_SEPOLIA_RPC || 'https://ethereum-sepolia-rpc.publicnode.com').trim();
+const DEFAULT_JR_PRICING_FACTORY = String(process.env.DASHBOARD_JR_PRICING_FACTORY || '0x1000000000000000000000000000000000000001').trim();
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -74,7 +75,6 @@ function buildEnvironmentConfig(profileKey) {
       name: 'Mainnet Fork',
       sections: {
         bondify: { mode: 'fixed', addresses: {} },
-        jrPricing: { mode: 'fixed', addresses: {} },
         staple: {
           mode: 'address-provider',
           addresses: {},
@@ -83,7 +83,8 @@ function buildEnvironmentConfig(profileKey) {
               id: 'mainnet-fork-version',
               label: deployVersion,
               version: deployVersion,
-              addressProvider: testSetup.addressProvider
+              addressProvider: testSetup.addressProvider,
+              jrPricingFactory: DEFAULT_JR_PRICING_FACTORY
             }
           ],
           selectedVersionId: 'mainnet-fork-version'
@@ -98,7 +99,6 @@ function buildEnvironmentConfig(profileKey) {
       name: 'Sepolia',
       sections: {
         bondify: { mode: 'fixed', addresses: {} },
-        jrPricing: { mode: 'fixed', addresses: {} },
         staple: {
           mode: 'address-provider',
           addresses: {},
@@ -107,7 +107,8 @@ function buildEnvironmentConfig(profileKey) {
               id: 'sepolia-version',
               label: deployVersion,
               version: deployVersion,
-              addressProvider: testSupport.addressProvider
+              addressProvider: testSupport.addressProvider,
+              jrPricingFactory: DEFAULT_JR_PRICING_FACTORY
             }
           ],
           selectedVersionId: 'sepolia-version'
@@ -120,7 +121,6 @@ function buildEnvironmentConfig(profileKey) {
     name: 'Sepolia',
     sections: {
       bondify: { mode: 'fixed', addresses: {} },
-      jrPricing: { mode: 'fixed', addresses: {} },
       staple: {
         mode: 'address-provider',
         addresses: {},

@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { SEPOLIA_RPC, hasSepoliaArtifacts, sepoliaArtifacts, seedProfile } = require('./helpers/profiles');
+
+const TEST_JR_PRICING_FACTORY = '0x1000000000000000000000000000000000000001';
 const { assertRpcReady, assertCodeExists } = require('./helpers/rpc');
 
 test.describe('dashboard · sepolia profile', () => {
@@ -23,9 +25,10 @@ test.describe('dashboard · sepolia profile', () => {
     await page.locator('.nav-item', { hasText: 'Resolved Addresses' }).click();
     await expect(page.locator('#override-panel')).toContainText(deployVersion);
     await expect(page.locator('#override-panel')).toContainText(testSupport.addressProvider);
+    await expect(page.locator('#override-panel')).toContainText(TEST_JR_PRICING_FACTORY);
   });
 
-  test('default state keeps manual Bondify and Jr Pricing configuration while rpc switching stays consistent', async ({ page }) => {
+  test('default state keeps version-bound Staple settings while rpc switching stays consistent', async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
     await page.goto('/src/pages/environment/index.html');
 
@@ -49,7 +52,7 @@ test.describe('dashboard · sepolia profile', () => {
     await expect(page.locator('#current-block-info')).toContainText('Ethereum PublicNode');
   });
 
-  test('jr pricing page reports missing manual configuration on sepolia profile', async ({ page }) => {
+  test('jr pricing page reports missing factory runtime on sepolia profile', async ({ page }) => {
     await seedProfile(page, 1);
     await page.goto('/src/pages/jr-pricing/index.html');
 

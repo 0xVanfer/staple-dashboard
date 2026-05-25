@@ -24,7 +24,6 @@ function buildLocalProfile({ rpcName, rpcUrl, addressProvider, version, userAddr
       name: `${version} Local`,
       sections: {
         bondify: { mode: 'fixed', addresses: {} },
-        jrPricing: { mode: 'fixed', addresses: {} },
         staple: {
           mode: 'address-provider',
           addresses: {},
@@ -33,7 +32,8 @@ function buildLocalProfile({ rpcName, rpcUrl, addressProvider, version, userAddr
               id: `${version}-local`,
               label: version,
               version,
-              addressProvider
+              addressProvider,
+              jrPricingFactory: '0x1000000000000000000000000000000000000001'
             }
           ],
           selectedVersionId: `${version}-local`
