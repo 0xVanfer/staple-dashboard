@@ -2273,10 +2273,9 @@
             return;
           }
 
-          // Check signer availability (Prod safety check)
           const signer = await COMMON.resolveSigner(userAddr);
           if (!signer) {
-              alert(`Transaction blocked: Production environment requires a connected browser wallet for User ${userAddr}`);
+              alert(await COMMON.describeMissingSigner(userAddr, { subject: 'User' }));
               return;
           }
 
@@ -2339,10 +2338,9 @@
             return;
           }
 
-          // Check signer availability (Prod safety check)
           const signer = await COMMON.resolveSigner(userAddr);
           if (!signer) {
-              alert(`Transaction blocked: Production environment requires a connected browser wallet for User ${userAddr}`);
+              alert(await COMMON.describeMissingSigner(userAddr, { subject: 'User' }));
               return;
           }
 
@@ -2401,10 +2399,9 @@
             return;
           }
 
-          // Check signer availability (Prod safety check)
           const signer = await COMMON.resolveSigner(userAddr);
           if (!signer) {
-              alert(`Transaction blocked: Production environment requires a connected browser wallet for User ${userAddr}`);
+              alert(await COMMON.describeMissingSigner(userAddr, { subject: 'User' }));
               return;
           }
 

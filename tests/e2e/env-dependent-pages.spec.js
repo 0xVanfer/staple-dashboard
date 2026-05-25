@@ -339,6 +339,126 @@ test('jr-pricing falls back to direct oracle reads when batch state loading is p
   await expect(page.locator('#jr-tbody')).not.toContainText('Failed to load oracle state');
 });
 
+test('jr-pricing treats InvalidOraclePrice spot reads as zero without hiding other data', async ({ page }) => {
+  const cfg = {
+    factoryAddress: '0x1000000000000000000000000000000000000001',
+    oracleAddress: '0x2000000000000000000000000000000000000002',
+    jrToken: '0x3000000000000000000000000000000000000003',
+    collateralToken: '0x4000000000000000000000000000000000000004',
+    lendingToken: '0x5000000000000000000000000000000000000005',
+    adminAddress: '0x6000000000000000000000000000000000000006',
+    zeroAddress: '0x0000000000000000000000000000000000000000',
+    operatorRole: '0x97667070c54ef182b0f5858b034beac1b6f3089aa2d3188bb1e8929f4fa9b929'
+  };
+
+  await page.goto('/src/pages/jr-pricing/index.html', { waitUntil: 'domcontentloaded' });
+  await page.evaluate((config) => {
+    const providerMock = {
+      _isProvider: true,
+      getNetwork: async () => ({ chainId: 11155111, name: 'sepolia' }),
+      getCode: async (address) => {
+        const lower = String(address || '').toLowerCase();
+        if ([config.factoryAddress, config.oracleAddress].map((item) => item.toLowerCase()).includes(lower)) return '0x1234';
+        return '0x';
+      }
+    };
+
+    const defaultParams = {
+      waitTime: 86400,
+      borrowRate: 80000,
+      borrowRateStrategy: config.zeroAddress,
+      riskFreeRate: 0,
+      waitingPeriodRisk: 0
+    };
+
+    window.environment.getAllParams = () => ({
+      isProduction: true,
+      hasJrPricing: true,
+      chainID: 11155111,
+      jrPricingFactory: config.factoryAddress
+    });
+
+    window.stapleCommon.getRpcProvider = () => providerMock;
+
+    const invalidOraclePrice = () => {
+      const error = new Error('call revert exception (errorName="InvalidOraclePrice")');
+      error.code = 'CALL_EXCEPTION';
+      error.errorName = 'InvalidOraclePrice';
+      error.errorSignature = 'InvalidOraclePrice()';
+      error.data = '0x1f8f95a0';
+      return error;
+    };
+
+    const resolveCall = (target, method, params = []) => {
+      const lower = String(target || '').toLowerCase();
+      if (method === 'symbol' && lower === config.jrToken.toLowerCase()) return 'JRZERO';
+      if (lower === config.factoryAddress.toLowerCase()) {
+        if (method === 'getSupportedJrTokens') return [config.jrToken];
+        if (method === 'getOracle') return config.oracleAddress;
+      }
+      if (lower === config.oracleAddress.toLowerCase()) {
+        if (method === 'getConfig') {
+          return {
+            spotOracle: config.zeroAddress,
+            collateralToken: config.collateralToken,
+            lendingToken: config.lendingToken,
+            principalConverterSplit: config.zeroAddress,
+            aavePrincipalConverter: config.zeroAddress,
+            morphoPrincipalConverter: config.zeroAddress,
+            flashLoanFeeRate: 0,
+            slippage: 500,
+            slippageProvider: config.zeroAddress,
+            nonFlashLoanParams: defaultParams
+          };
+        }
+        if (method === 'getSlippage') return 500;
+        if (method === 'OPERATOR_ROLE') return config.operatorRole;
+        if (method === 'getRoleMemberCount') return 1;
+        if (method === 'getRoleMember') return config.adminAddress;
+        if (method === 'getJrTokenConfig') {
+          return {
+            supportedExitTypes: 2,
+            bondifySourceType: 3,
+            bondifyConfigId: '1',
+            marketAdjustment: 0,
+            hasCustomParams: false,
+            customParams: defaultParams
+          };
+        }
+        if (method === 'getBorrowRate') return 80000;
+        if (method === 'getNonFlashLoanParams') return defaultParams;
+        if (method === 'getSpotPrice') throw invalidOraclePrice();
+        if (method === 'getExitPrice') return '950000000000000000';
+      }
+      throw new Error(`Unhandled mock call: ${lower}:${method}:${JSON.stringify(params)}`);
+    };
+
+    window.RpcManager = {
+      call: async (contract, method, params = []) => resolveCall(contract?.address || contract?.target || '', method, params),
+      multicall: async (calls) => calls.map((call) => {
+        if (
+          String(call.target || '').toLowerCase() === config.oracleAddress.toLowerCase()
+          && call.method === 'getSpotPrice'
+        ) {
+          return null;
+        }
+        try {
+          return resolveCall(call.target, call.method, call.params || []);
+        } catch (error) {
+          return call.allowFailure ? null : Promise.reject(error);
+        }
+      })
+    };
+  }, cfg);
+
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.locator('#jr-status')).toContainText('Loaded 1 JR token records');
+  await expect(page.locator('#jr-tbody')).toContainText('JRZERO');
+  await expect(page.locator('#jr-tbody')).not.toContainText('InvalidOraclePrice');
+  await expect(page.locator('#jr-tbody')).not.toContainText('Failed to load oracle state');
+  await expect(page.locator('#jr-tbody')).toContainText('0.000000');
+});
+
 test('jr-pricing create-oracle no longer depends on legacy bondify manual addresses', async ({ page }) => {
   const cfg = {
     factoryAddress: '0x1000000000000000000000000000000000000001',
@@ -453,6 +573,105 @@ test('jr-pricing create-oracle no longer depends on legacy bondify manual addres
       ]
     }
   ]);
+});
+
+test('testtoken page prefers local anvil mint override even when factory exists and environment is marked production', async ({ page }) => {
+  const cfg = {
+    user: '0x000000000000000000000000000000000000dEaD',
+    token: '0x1000000000000000000000000000000000000001'
+  };
+
+  await page.addInitScript((config) => {
+    const storage = new Map();
+    const ethBalances = new Map();
+    const zero32 = '0x'.padEnd(66, '0');
+    window.__lastAlert = '';
+    window.alert = (message) => {
+      window.__lastAlert = String(message || '');
+    };
+
+    const readBalanceHex = (token, user) => {
+      const holder = ethers.utils.getAddress(user);
+      for (let i = 0; i < 50; i++) {
+        const slotIndex = ethers.utils.hexZeroPad(ethers.utils.hexlify(i), 32);
+        const key = ethers.utils.hexZeroPad(holder, 32);
+        const probeSlot = ethers.utils.keccak256(ethers.utils.concat([key, slotIndex]));
+        const stored = storage.get(`${String(token).toLowerCase()}:${probeSlot.toLowerCase()}`);
+        if (stored) return stored;
+      }
+      return zero32;
+    };
+
+    const providerMock = {
+      _isProvider: true,
+      async getBalance(address) {
+        return ethBalances.get(String(address).toLowerCase()) || ethers.constants.Zero;
+      },
+      async getStorageAt(address, slot) {
+        return storage.get(`${String(address).toLowerCase()}:${String(slot).toLowerCase()}`) || zero32;
+      },
+      async send(method, params = []) {
+        if (method === 'web3_clientVersion') return 'anvil/v1.0.0';
+        if (method === 'hardhat_impersonateAccount' || method === 'anvil_impersonateAccount') return true;
+        if (method === 'hardhat_setBalance' || method === 'anvil_setBalance') {
+          const [address, value] = params;
+          ethBalances.set(String(address).toLowerCase(), ethers.BigNumber.from(value));
+          return true;
+        }
+        if (method === 'hardhat_setStorageAt' || method === 'anvil_setStorageAt') {
+          const [address, slot, value] = params;
+          storage.set(`${String(address).toLowerCase()}:${String(slot).toLowerCase()}`, ethers.utils.hexZeroPad(value, 32));
+          return true;
+        }
+        throw new Error(`Unhandled provider.send method: ${method}`);
+      },
+      async call(tx) {
+        const selector = String(tx?.data || '').slice(0, 10).toLowerCase();
+        if (selector === '0x70a08231') {
+          const user = ethers.utils.getAddress(`0x${String(tx.data).slice(-40)}`);
+          return readBalanceHex(tx.to, user);
+        }
+        throw new Error(`Unhandled provider.call selector: ${selector}`);
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      window.environment.getAllParams = () => ({
+        rpc: 'http://192.168.1.8:8545',
+        user: config.user,
+        isProduction: true,
+        chainID: 1,
+        testERC20Factory: '0x2000000000000000000000000000000000000002',
+        priceProvider: ''
+      });
+      window.environment.getSymbols = () => ({ [config.token.toLowerCase()]: 'USDC' });
+      window.stapleCommon.getRpcProvider = () => providerMock;
+      window.stapleCommon.resolveSigner = async () => null;
+      window.contractData.refreshEnvironmentData = async () => {};
+      window.contractData.getSupportedTokens = async () => [config.token];
+      window.RpcManager = {
+        multicall: async (calls) => calls.map((call) => {
+          if (call.method === 'decimals') return 6;
+          if (call.method === 'balanceOf') return ethers.BigNumber.from(readBalanceHex(call.target, call.params[0]));
+          return null;
+        })
+      };
+    }, { once: true });
+  }, cfg);
+
+  await page.goto('/src/pages/testtoken/index.html', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#btn-mint-all')).toBeEnabled();
+  await expect(page.locator('#btn-mint-all')).toHaveAttribute('title', /Local Anvil\/Hardhat runtime detected/i);
+  await expect(page.locator('#tokens-tbody')).toContainText('USDC');
+  await expect(page.locator('#tokens-tbody')).toContainText('0');
+
+  await page.getByRole('button', { name: 'Mint ETH', exact: true }).click();
+  await expect.poll(async () => page.locator('#eth-display').textContent()).not.toBe('0');
+  await expect.poll(async () => page.evaluate(() => window.__lastAlert)).toBe('');
+
+  await page.getByRole('button', { name: 'Mint All Tokens', exact: true }).click();
+  await expect.poll(async () => page.evaluate(() => window.__lastAlert)).toBe('');
+  await expect(page.locator('#tokens-tbody')).toContainText('1000000000000');
 });
 
 test('testtoken page does not treat pool assets as test tokens when factory is missing', async ({ page }) => {

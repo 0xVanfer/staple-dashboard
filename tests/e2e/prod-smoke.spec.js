@@ -287,6 +287,102 @@ test('connected wallet can be recovered after refreshing environment and after l
   expect(walletState.providerLabel).toBe('MetaMask');
 });
 
+test('current user displays switch cleanly across wallet connect and disconnect', async ({ page }) => {
+  const metaMaskAddress = '0x4545454545454545454545454545454545454545';
+  const savedAddress = '0x6666666666666666666666666666666666666666';
+
+  await page.addInitScript(() => {
+    const metaMaskAddress = '0x4545454545454545454545454545454545454545';
+    const provider = {
+      isMetaMask: true,
+      providerInfo: { name: 'MetaMask', rdns: 'io.metamask' },
+      request: async ({ method }) => {
+        if (method === 'wallet_requestPermissions') return [{ parentCapability: 'eth_accounts' }];
+        if (method === 'wallet_revokePermissions') return [];
+        if (method === 'eth_requestAccounts') return [metaMaskAddress];
+        if (method === 'eth_accounts') return [metaMaskAddress];
+        if (method === 'eth_chainId') return '0x1';
+        return [];
+      },
+      on: () => {}
+    };
+    window.ethereum = provider;
+  });
+
+  await page.goto('/src/pages/environment/index.html', { waitUntil: 'domcontentloaded' });
+  await page.evaluate((saved) => {
+    window.environment.addUser(saved, 'Saved Local User');
+    window.environment.selectUser(saved);
+  }, savedAddress);
+
+  await expect.poll(async () => page.evaluate(() => window.environment.getAllParams().user)).toBe(savedAddress);
+  await expect.poll(async () => page.locator('#grant-role-current-user-short').textContent()).toContain('0x66...6666');
+
+  await page.evaluate(async () => {
+    const wallets = window.environment.listBrowserWallets();
+    const metaMask = wallets.find((item) => item.label === 'MetaMask');
+    await window.environment.connectBrowserWallet(metaMask.id);
+  });
+
+  await expect.poll(async () => page.evaluate(() => window.environment.getAllParams().user)).toBe(metaMaskAddress);
+  await expect.poll(async () => page.locator('#grant-role-current-user-short').textContent()).toContain('0x45...4545');
+  await expect(page.locator('#user-list-container .user-item').first()).toContainText('active');
+  await expect(page.locator('#user-list-container')).toContainText('selected after disconnect');
+  await expect(page.locator('#user-list-container')).toContainText('Selected');
+
+  await page.evaluate(async () => {
+    await window.environment.disconnectBrowserWallet();
+  });
+
+  await expect.poll(async () => page.evaluate(() => window.environment.getWalletState().connected)).toBeFalsy();
+  await expect.poll(async () => page.evaluate(() => window.environment.getAllParams().user)).toBe(savedAddress);
+  await expect.poll(async () => page.locator('#grant-role-current-user-short').textContent()).toContain('0x66...6666');
+});
+
+test('production-marked local anvil runtime still allows common signer resolution without a browser wallet', async ({ page }) => {
+  const userAddress = '0x7777777777777777777777777777777777777777';
+
+  await page.goto('/src/pages/environment/index.html', { waitUntil: 'domcontentloaded' });
+  const result = await page.evaluate(async (userAddress) => {
+    const fakeSigner = {
+      _isSigner: true,
+      getAddress: async () => userAddress
+    };
+    const fakeProvider = {
+      send: async (method, params) => {
+        if (method === 'web3_clientVersion') return 'anvil/1.0.0';
+        if (method === 'hardhat_impersonateAccount' || method === 'anvil_impersonateAccount') return true;
+        if (method === 'hardhat_metadata' || method === 'anvil_nodeInfo') return { ok: true };
+        throw new Error(`Unexpected rpc method: ${method} (${JSON.stringify(params || [])})`);
+      },
+      getBalance: async () => window.ethers.utils.parseEther('100'),
+      getSigner: () => fakeSigner
+    };
+
+    const originalGetAllParams = window.environment.getAllParams.bind(window.environment);
+    window.environment.getAllParams = () => ({
+      ...originalGetAllParams(),
+      rpc: 'http://192.168.1.8:8545',
+      isProduction: true,
+      user: userAddress
+    });
+    window.RpcManager = {
+      getProvider: () => fakeProvider
+    };
+
+    const signer = await window.stapleCommon.resolveSigner(userAddress);
+    return {
+      hasSigner: !!signer,
+      address: signer ? await signer.getAddress() : '',
+      missingMessage: await window.stapleCommon.describeMissingSigner(userAddress, { subject: 'User' })
+    };
+  }, userAddress);
+
+  expect(result.hasSigner).toBeTruthy();
+  expect(result.address).toBe(userAddress);
+  expect(result.missingMessage).toContain('No compatible signer is available');
+});
+
 test('connected wallet signer is preferred over saved user and does not fall back to impersonation', async ({ page }) => {
   const metaMaskAddress = '0x5555555555555555555555555555555555555555';
 

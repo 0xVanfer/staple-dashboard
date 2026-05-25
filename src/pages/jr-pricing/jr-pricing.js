@@ -266,6 +266,24 @@
     }
   }
 
+  function isInvalidOraclePriceError(error) {
+    const message = error?.message || String(error || '');
+    return error?.errorName === 'InvalidOraclePrice'
+      || error?.reason === 'InvalidOraclePrice'
+      || /InvalidOraclePrice/.test(message);
+  }
+
+  async function readSpotPrice(oracle, jrToken) {
+    try {
+      return await callContract(oracle, 'getSpotPrice', [jrToken]);
+    } catch (error) {
+      if (isInvalidOraclePriceError(error)) {
+        return ethers.constants.Zero;
+      }
+      throw error;
+    }
+  }
+
   function setStatus(message, type = 'info') {
     const el = document.getElementById('jr-status');
     if (!el) return;
@@ -626,7 +644,7 @@
         callContract(oracle, 'getSlippage'),
         callContract(oracle, 'getBorrowRate', [jrToken]),
         callContract(oracle, 'getNonFlashLoanParams', [jrToken]),
-        callContract(oracle, 'getSpotPrice', [jrToken]),
+        readSpotPrice(oracle, jrToken),
         getPrivilegedActorAddress(oracle)
       ]);
 
@@ -1070,12 +1088,10 @@
     const mismatch = signerMismatchMessage(address, options?.label || 'admin');
     if (mismatch) throw new Error(mismatch);
 
-    const isProduction = !!window.environment?.getAllParams?.().isProduction;
-    if (isProduction) {
-      throw new Error('No compatible admin signer is available for this action on the current production RPC');
-    }
-
-    throw new Error('No compatible signer is available. Use a local Anvil RPC or connect the matching admin wallet.');
+    throw new Error(await COMMON.describeMissingSigner(address, {
+      requireAdmin: true,
+      subject: options?.label || 'admin'
+    }));
   }
 
   async function runAsOperator(row, executor) {

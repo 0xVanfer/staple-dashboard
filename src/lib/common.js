@@ -386,6 +386,9 @@
 
   // =========== RPC Provider Access ===========
   function getRpcProvider() {
+    if (window.stapleCommon && typeof window.stapleCommon.getRpcProvider === 'function' && window.stapleCommon.getRpcProvider !== getRpcProvider) {
+      return window.stapleCommon.getRpcProvider();
+    }
     if (window.RpcManager && window.RpcManager.getProvider()) {
       return window.RpcManager.getProvider();
     }
@@ -432,6 +435,8 @@
     return candidates;
   }
 
+  let localNodeRuntimeCapabilityCache = { rpc: '', value: null };
+
   function connectedBrowserWalletState() {
     const env = window.environment;
     const walletState = env?.getWalletState ? env.getWalletState() : null;
@@ -441,6 +446,81 @@
       walletState,
       walletConnected
     };
+  }
+
+  async function detectLocalNodeRuntimeCapabilities() {
+    const env = window.environment;
+    const rpc = String(env?.getAllParams?.().rpc || '');
+    if (!rpc) {
+      return {
+        rpc: '',
+        clientVersion: '',
+        isLocalDevRuntime: false
+      };
+    }
+    if (localNodeRuntimeCapabilityCache.rpc === rpc && localNodeRuntimeCapabilityCache.value) {
+      return localNodeRuntimeCapabilityCache.value;
+    }
+
+    const provider = getRpcProvider();
+    let clientVersion = '';
+    let isLocalDevRuntime = false;
+
+    try {
+      clientVersion = String(await provider.send('web3_clientVersion', []) || '');
+      isLocalDevRuntime = /anvil|hardhat/i.test(clientVersion);
+    } catch (_) {}
+
+    if (!isLocalDevRuntime) {
+      try {
+        await provider.send('hardhat_metadata', []);
+        isLocalDevRuntime = true;
+      } catch (_) {}
+    }
+
+    if (!isLocalDevRuntime) {
+      try {
+        await provider.send('anvil_nodeInfo', []);
+        isLocalDevRuntime = true;
+      } catch (_) {}
+    }
+
+    const value = {
+      rpc,
+      clientVersion,
+      isLocalDevRuntime
+    };
+    localNodeRuntimeCapabilityCache = { rpc, value };
+    return value;
+  }
+
+  async function describeMissingSigner(address, options = {}) {
+    const requireAdmin = !!options.requireAdmin;
+    const subject = String(options.subject || (requireAdmin ? 'admin' : 'User'));
+    const normalizedTarget = isAddress(address) ? normalizeAddress(address) : '';
+    const { env, walletState, walletConnected } = connectedBrowserWalletState();
+    const allParams = env?.getAllParams ? env.getAllParams() : {};
+    const isProduction = !!allParams.isProduction;
+    const rpcChainId = Number(allParams.chainID || allParams.chainId || 0) || 0;
+    const walletChainId = Number(walletState?.chainId || 0) || 0;
+    const walletAddress = isAddress(walletState?.address) ? normalizeAddress(walletState.address) : '';
+
+    if (walletConnected) {
+      if (normalizedTarget && walletAddress && normalizedTarget.toLowerCase() !== walletAddress.toLowerCase()) {
+        return `Connected browser wallet ${shortenAddress(walletAddress)} does not match required ${subject} ${shortenAddress(normalizedTarget)}. Connect the matching wallet or disconnect the current wallet first.`;
+      }
+      if (rpcChainId && walletChainId && rpcChainId !== walletChainId) {
+        return `Connected browser wallet chain ${walletChainId} does not match selected RPC chain ${rpcChainId}. Switch the wallet network first.`;
+      }
+      return 'Connected browser wallet signer is unavailable for the selected RPC. Reconnect the wallet or switch to the matching network.';
+    }
+
+    const localRuntime = await detectLocalNodeRuntimeCapabilities();
+    if (isProduction && !localRuntime.isLocalDevRuntime) {
+      return `Transaction blocked: Production environment requires a connected browser wallet for ${subject}${normalizedTarget ? ` ${normalizedTarget}` : ''}`;
+    }
+
+    return `No compatible signer is available for ${subject}${normalizedTarget ? ` ${normalizedTarget}` : ''}. Use a local Anvil/Hardhat RPC or connect the matching browser wallet.`;
   }
 
   function shouldSkipWritePreflight(options = {}) {
@@ -495,6 +575,7 @@
     const allParams = env.getAllParams ? env.getAllParams() : {};
     const isProduction = !!allParams.isProduction;
     const { walletConnected } = connectedBrowserWalletState();
+    const localRuntime = await detectLocalNodeRuntimeCapabilities();
 
     // Runtime rule: once a browser wallet is connected, write operations must use that
     // wallet signer. Do not silently fall back to local impersonation.
@@ -514,7 +595,7 @@
       return null;
     }
 
-    if (isProduction) {
+    if (isProduction && !localRuntime.isLocalDevRuntime) {
       console.warn('No compatible signer is available for this production RPC. Connect the matching browser wallet.');
       return null;
     }
@@ -758,6 +839,8 @@
     resolveSigner,
     discoverDynamicAdminCandidates,
     connectedBrowserWalletState,
+    detectLocalNodeRuntimeCapabilities,
+    describeMissingSigner,
     shouldSkipWritePreflight,
     getExplorerLink,
   };

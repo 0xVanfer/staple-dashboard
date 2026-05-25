@@ -11,6 +11,7 @@ try {
 
   // ===== Refresh state management (avoid race conditions) =====
   let refreshEpoch = 0; // Increment on each refresh to discard stale renders
+  const LOCAL_OVERRIDE_MINT_AMOUNT = '1000000';
   const setRefreshing = (is) => {
     const btn = document.getElementById('btn-refresh');
     if (btn) btn.disabled = !!is;
@@ -19,6 +20,30 @@ try {
     const root = document.getElementById('tokens-tbody');
     if (root) root.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:#666;">${msg}</td></tr>`;
   };
+
+  async function detectLocalStateOverrideCapability() {
+    try {
+      const runtime = await COMMON.detectLocalNodeRuntimeCapabilities();
+      return !!runtime?.isLocalDevRuntime;
+    } catch (e) {
+      console.warn('[testtoken] failed to detect local state override capability', e);
+      return false;
+    }
+  }
+
+  async function getMintCapabilities() {
+    const envParams = environment.getAllParams();
+    const factoryAddr = envParams.testERC20Factory;
+    const hasFactory = !!(factoryAddr && ethers.utils.isAddress(factoryAddr));
+    const canLocalOverrideMint = await detectLocalStateOverrideCapability();
+    return {
+      hasFactory,
+      canLocalOverrideMint,
+      prefersLocalOverrideMint: canLocalOverrideMint,
+      canMint: hasFactory || canLocalOverrideMint,
+      factoryAddr
+    };
+  }
 
   // Global error capture: for debugging
   window.addEventListener('error', (e) => console.error('[testtoken.display] window.onerror', e?.message || e, e?.error || ''));
@@ -123,20 +148,29 @@ try {
     root.innerHTML = body;
   }
 
-  function syncTestTokenFactoryActions(factoryAddr) {
-    const hasFactory = !!(factoryAddr && ethers.utils.isAddress(factoryAddr));
+  function syncTestTokenFactoryActions(capabilities) {
+    const hasFactory = !!capabilities?.hasFactory;
+    const canMint = !!capabilities?.canMint;
+    const canLocalOverrideMint = !!capabilities?.canLocalOverrideMint;
+    const prefersLocalOverrideMint = !!capabilities?.prefersLocalOverrideMint;
     const mintAllBtn = document.getElementById('btn-mint-all');
     const createTokenCard = document.getElementById('btn-create-token-card');
     if (mintAllBtn) {
-      mintAllBtn.disabled = !hasFactory;
-      mintAllBtn.title = hasFactory ? '' : 'Test Token Factory is not configured in Environment';
+      mintAllBtn.disabled = !canMint;
+      mintAllBtn.title = canLocalOverrideMint
+        ? (prefersLocalOverrideMint
+            ? 'Local Anvil/Hardhat runtime detected: Mint All will use token balance override'
+            : '')
+        : hasFactory
+          ? ''
+          : 'Test Token Factory is not configured in Environment';
     }
     if (createTokenCard) {
       createTokenCard.style.opacity = hasFactory ? '' : '0.5';
       createTokenCard.style.pointerEvents = hasFactory ? '' : 'none';
       createTokenCard.title = hasFactory ? '' : 'Test Token Factory is not configured in Environment';
     }
-    return hasFactory;
+    return canMint;
   }
 
   // Main refresh: get supported tokens -> deduplicate -> concurrent read metadata / balance / price
@@ -144,15 +178,15 @@ try {
     const envParams = environment.getAllParams();
     const rpc = envParams.rpc;
     const user = envParams.user;
-    const factoryAddr = envParams.testERC20Factory;
-    const hasFactory = syncTestTokenFactoryActions(factoryAddr);
+    const mintCapabilities = await getMintCapabilities();
+    const canMint = syncTestTokenFactoryActions(mintCapabilities);
     if (!rpc || !user) {
       console.warn('missing rpc or user');
       renderTokenTable([]);
       return;
     }
-    if (!hasFactory) {
-      console.warn('missing test token factory; skip non-test token discovery for testtoken page');
+    if (!canMint) {
+      console.warn('missing test token factory and no local override mint capability; skip token discovery for testtoken page');
       renderTokenTable([]);
       setTableLoading('Test Token Factory not configured');
       return;
@@ -389,12 +423,13 @@ try {
   async function handleSetEth() {
     const rpc = environment.getAllParams().rpc;
     const user = environment.getAllParams().user;
-    const isProd = !!environment.getAllParams().isProduction;
     if (!rpc || !user) {
       alert('Please set rpc and user in Environment page first');
       return;
     }
-    if (isProd) {
+
+    const canLocalOverride = await detectLocalStateOverrideCapability();
+    if (!canLocalOverride) {
       alert('Operation disabled in production environment. Please use a faucet.');
       return;
     }
@@ -437,7 +472,7 @@ try {
   async function collectVerifiableTokens(user) {
     const signer = await COMMON.resolveSigner(user);
     if (!signer) {
-      throw new Error(`Transaction blocked: Production environment requires a connected browser wallet for ${user}`);
+      throw new Error(await COMMON.describeMissingSigner(user, { subject: 'User' }));
     }
 
     const priceProvider = await window.contracts.getPriceProvider(signer);
@@ -559,6 +594,84 @@ try {
   }
 
   // Event: Batch mint test tokens
+  async function setTokenStorage(provider, addr, slot, value) {
+    const paddedValue = ethers.utils.hexZeroPad(value, 32);
+    try {
+      await provider.send('hardhat_setStorageAt', [addr, slot, paddedValue]);
+      return true;
+    } catch (e) {
+      try {
+        await provider.send('anvil_setStorageAt', [addr, slot, paddedValue]);
+        return true;
+      } catch (e2) {
+        return false;
+      }
+    }
+  }
+
+  async function readTokenBalance(tokenAddress, userAddress, provider) {
+    const response = await provider.call({
+      to: tokenAddress,
+      data: `0x70a08231${String(userAddress).replace(/^0x/, '').padStart(64, '0')}`
+    });
+    if (response && typeof response === 'string' && response !== '0x') {
+      return ethers.BigNumber.from(response);
+    }
+    return ethers.constants.Zero;
+  }
+
+  async function overrideTokenBalance(tokenAddress, userAddress, amount, provider) {
+    const amountHex = ethers.utils.hexZeroPad(amount.toHexString(), 32);
+
+    for (let i = 0; i < 50; i++) {
+      const slotIndex = ethers.utils.hexZeroPad(ethers.utils.hexlify(i), 32);
+      const key = ethers.utils.hexZeroPad(userAddress, 32);
+      const probeSlot = ethers.utils.keccak256(ethers.utils.concat([key, slotIndex]));
+      const previousValue = await provider.getStorageAt(tokenAddress, probeSlot);
+      const success = await setTokenStorage(provider, tokenAddress, probeSlot, amountHex);
+      if (!success) {
+        throw new Error('Current RPC does not support hardhat/anvil setStorageAt');
+      }
+      const newBalance = await readTokenBalance(tokenAddress, userAddress, provider);
+      if (newBalance.eq(amount)) {
+        return true;
+      }
+      await setTokenStorage(provider, tokenAddress, probeSlot, previousValue);
+    }
+
+    throw new Error('Failed to detect token balance storage slot');
+  }
+
+  async function mintAllViaLocalOverride(user) {
+    const provider = COMMON.getRpcProvider();
+    const targets = (lastTokenRows || []).filter((row) => row && ethers.utils.isAddress(row.address));
+    if (!targets.length) {
+      throw new Error('No token rows available for local mint override');
+    }
+
+    const failures = [];
+    for (const row of targets) {
+      try {
+        const decimals = Number.isFinite(Number(row.decimals)) ? Number(row.decimals) : 18;
+        const amount = ethers.utils.parseUnits(LOCAL_OVERRIDE_MINT_AMOUNT, decimals);
+        await overrideTokenBalance(row.address, user, amount, provider);
+      } catch (error) {
+        failures.push(`${row.symbol || row.address}: ${error?.message || error}`);
+      }
+    }
+
+    if (failures.length === targets.length) {
+      throw new Error(failures.slice(0, 3).join(' | '));
+    }
+    if (failures.length > 0) {
+      window.showToast?.(`Local mint override completed with partial failures (${targets.length - failures.length}/${targets.length})`);
+      console.warn('[testtoken] local mint override partial failures', failures);
+      return;
+    }
+
+    window.showToast?.('Local mint override completed');
+  }
+
   async function handleMintAll() {
     const rpc = environment.getAllParams().rpc;
     const user = environment.getAllParams().user;
@@ -571,19 +684,9 @@ try {
       return;
     }
 
-    const signer = await COMMON.resolveSigner(user);
-    if (!signer) {
-        alert(`Transaction blocked: Production environment requires a connected browser wallet for ${user}`);
-        return;
-    }
-
-    const factoryAddr = environment.getAllParams().testERC20Factory;
-    if (!factoryAddr || !ethers.utils.isAddress(factoryAddr)) {
-      alert('Missing or invalid Test Token Factory address (testTokenFactory / testErc20Factory)');
-      return;
-    }
-    if (typeof stapleTestERC20FactoryAbi === 'undefined') {
-      alert('Missing stapleTestERC20FactoryAbi');
+    const mintCapabilities = await getMintCapabilities();
+    if (!mintCapabilities.canMint) {
+      alert('Missing Test Token Factory and no supported local mint runtime detected');
       return;
     }
 
@@ -600,12 +703,25 @@ try {
           await COMMON.tryImpersonateAccount(provider, user).catch(()=>{});
       }
 
-      const factory = new ethers.Contract(factoryAddr, stapleTestERC20FactoryAbi, signer);
-      const tx = await factory.batchMintFor(user);
-      const receipt = await tx.wait();
-      window.showToast?.('Mint all tokens completed');
+      if (mintCapabilities.prefersLocalOverrideMint) {
+        await mintAllViaLocalOverride(user);
+      } else if (mintCapabilities.hasFactory) {
+        const signer = await COMMON.resolveSigner(user);
+        if (!signer) {
+          throw new Error(await COMMON.describeMissingSigner(user, { subject: 'User' }));
+        }
+        if (typeof stapleTestERC20FactoryAbi === 'undefined') {
+          throw new Error('Missing stapleTestERC20FactoryAbi');
+        }
+        const factory = new ethers.Contract(mintCapabilities.factoryAddr, stapleTestERC20FactoryAbi, signer);
+        const tx = await factory.batchMintFor(user);
+        await tx.wait();
+        window.showToast?.('Mint all tokens completed');
+      } else {
+        throw new Error('No supported mint path is available');
+      }
     } catch (e) {
-      console.error('[testtoken] batchMintFor failed', e);
+      console.error('[testtoken] mint all failed', e);
       alert('Mint failed: ' + (e?.error?.message || e?.data?.message || e?.message || e));
     } finally {
       if (mintAllBtn) {
@@ -729,7 +845,7 @@ try {
   // Page load: Auto execute first refresh
   document.addEventListener('DOMContentLoaded', async () => {
     wire();
-    syncTestTokenFactoryActions(environment.getAllParams().testERC20Factory);
+    syncTestTokenFactoryActions(await getMintCapabilities());
     await refreshEthBalance();
     await refreshTokenTable();
   });

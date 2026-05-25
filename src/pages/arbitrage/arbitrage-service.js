@@ -459,7 +459,7 @@ class ArbitrageService {
         const userAddr = Utils.getUserAddress();
         const signer = await window.stapleCommon.resolveSigner(userAddr);
         if (!signer) {
-            alert("Please connect a browser wallet for Production mode");
+            alert(await window.stapleCommon.describeMissingSigner(userAddr, { subject: 'User' }));
             return;
         }
 
@@ -580,7 +580,7 @@ class ArbitrageService {
     async updateCurvePool() {
         const userAddr = Utils.getUserAddress();
         const signer = await window.stapleCommon.resolveSigner(userAddr);
-        if (!signer) { alert("Please connect a browser wallet for Production mode"); return; }
+        if (!signer) { alert(await window.stapleCommon.describeMissingSigner(userAddr, { subject: 'User' })); return; }
         const addr = environment.getAllParams().mockCurve;
         if (!addr) { alert("Mock Curve address not set"); return; }
         
@@ -632,7 +632,7 @@ class ArbitrageService {
     async updateUniV2Pair() {
         const userAddr = Utils.getUserAddress();
         const signer = await window.stapleCommon.resolveSigner(userAddr);
-        if (!signer) { alert("Please connect a browser wallet for Production mode"); return; }
+        if (!signer) { alert(await window.stapleCommon.describeMissingSigner(userAddr, { subject: 'User' })); return; }
         const addr = environment.getAllParams().mockUniswapV2;
         if (!addr) { alert("Mock UniV2 address not set"); return; }
 
@@ -684,7 +684,7 @@ class ArbitrageService {
     async updateUniV3Pool() {
         const userAddr = Utils.getUserAddress();
         const signer = await window.stapleCommon.resolveSigner(userAddr);
-        if (!signer) { alert("Please connect a browser wallet for Production mode"); return; }
+        if (!signer) { alert(await window.stapleCommon.describeMissingSigner(userAddr, { subject: 'User' })); return; }
         const addr = environment.getAllParams().mockUniswapV3;
         if (!addr) { alert("Mock UniV3 address not set"); return; }
 
@@ -914,7 +914,7 @@ class ArbitrageService {
     async executeArbitrage() {
         const userAddr = Utils.getUserAddress();
         const signer = await window.stapleCommon.resolveSigner(userAddr);
-        if (!signer) { alert("Please connect a browser wallet for Production mode"); return; }
+        if (!signer) { alert(await window.stapleCommon.describeMissingSigner(userAddr, { subject: 'User' })); return; }
         
         const updateState = this.ui.getGlobalUpdateState();
         const amountInVal = this.ui.els.amountIn.value;

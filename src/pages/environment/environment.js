@@ -257,8 +257,8 @@
       address: normAddr(patch.address || ''),
       chainId: Number(patch.chainId || 0) || 0
     };
-    renderWalletPanel();
-    renderUsers();
+    render();
+    scheduleAccessControlInspect();
   }
 
   async function readProviderChainId(provider) {
@@ -2143,7 +2143,13 @@
   function autoUserTags(user) {
     const tags = [];
     if (!user) return tags;
-    if (_selectedUser && String(user.address).toLowerCase() === String(_selectedUser).toLowerCase()) tags.push('active');
+    const effectiveUser = effectiveCurrentUserAddress();
+    const selectedUser = normAddr(_selectedUser || '');
+    if (effectiveUser && String(user.address).toLowerCase() === String(effectiveUser).toLowerCase()) {
+      tags.push('active');
+    } else if (selectedUser && String(user.address).toLowerCase() === String(selectedUser).toLowerCase()) {
+      tags.push(_walletState.connected ? 'selected after disconnect' : 'selected');
+    }
     const adminAddresses = new Set();
     currentResolvedAddresses().forEach((address) => {
       contractAdminCandidates(address).forEach((admin) => adminAddresses.add(admin.toLowerCase()));
@@ -3031,14 +3037,20 @@
       return;
     }
     const n = normAddr(a);
+    const walletAddress = normAddr(_walletState.address || '');
+    const walletConnected = !!(_walletState.connected && isAddr(walletAddress));
     const isSavedUser = _userList.some((u) => String(u.address).toLowerCase() === n.toLowerCase());
-    const isConnectedWalletUser = !!(_walletState.connected && isAddr(_walletState.address) && String(_walletState.address).toLowerCase() === n.toLowerCase());
+    const isConnectedWalletUser = !!(walletConnected && walletAddress.toLowerCase() === n.toLowerCase());
     if (isSavedUser || isConnectedWalletUser) {
       _selectedUser = n;
       persist();
       render();
       scheduleAccessControlInspect();
-      notify(`Current user switched to ${shorten(n)}`);
+      if (walletConnected && !isConnectedWalletUser) {
+        notify(`Saved ${shorten(n)} as the fallback user. The connected wallet ${shorten(walletAddress)} remains the current actor until it disconnects.`);
+      } else {
+        notify(`Current user switched to ${shorten(n)}`);
+      }
     }
   }
 
@@ -3491,9 +3503,13 @@
     if (!c) return;
     c.innerHTML = '';
 
-    if (_walletState.connected && isAddr(_walletState.address)) {
+    const effectiveUser = effectiveCurrentUserAddress();
+    const walletConnected = !!(_walletState.connected && isAddr(_walletState.address));
+    const selectedFallbackUser = normAddr(_selectedUser || '');
+
+    if (walletConnected) {
       const walletCard = document.createElement('div');
-      const active = _selectedUser && String(_selectedUser).toLowerCase() === String(_walletState.address).toLowerCase();
+      const active = !!(effectiveUser && String(effectiveUser).toLowerCase() === String(_walletState.address).toLowerCase());
       walletCard.className = 'user-item' + (active ? ' active' : '');
       walletCard.innerHTML = `
         <div class="user-item-content">
@@ -3506,16 +3522,18 @@
     }
 
     if (!_userList.length) {
-      if (!_walletState.connected) c.innerHTML = '<div class="empty-state">No saved accounts added yet.</div>';
+      if (!walletConnected) c.innerHTML = '<div class="empty-state">No saved accounts added yet.</div>';
       c.querySelectorAll('[data-select-wallet-user]').forEach((b) => b.addEventListener('click', () => selectUser(b.getAttribute('data-select-wallet-user'))));
       renderUserEditor();
       return;
     }
     _userList.forEach((u, idx) => {
-      const sel = _selectedUser && String(u.address).toLowerCase() === String(_selectedUser).toLowerCase();
+      const addressLower = String(u.address).toLowerCase();
+      const active = !!(effectiveUser && addressLower === String(effectiveUser).toLowerCase());
+      const queued = !!(walletConnected && selectedFallbackUser && addressLower === selectedFallbackUser.toLowerCase() && !active);
       const tags = userTagsForDisplay(u);
       const d = document.createElement('div');
-      d.className = 'user-item' + (sel ? ' active' : '');
+      d.className = 'user-item' + (active ? ' active' : '');
       d.innerHTML = `
         <div class="user-item-content">
           <div class="user-header">
@@ -3526,7 +3544,7 @@
             ${tags.length ? tags.map((tag) => `<span class="user-tag">${esc(tag)}</span>`).join('') : '<span class="user-tag muted">no tags</span>'}
           </div>
         </div>
-        <div class="user-item-actions">${!sel ? `<button class="btn btn-sm btn-secondary" data-select-user="${esc(u.address)}">Use</button>` : ''}<button class="btn btn-sm btn-secondary" data-edit-user="${esc(u.address)}">Edit</button><button class="btn btn-sm btn-danger" data-delete-user="${esc(u.address)}">Delete</button></div>`;
+        <div class="user-item-actions">${!active ? `<button class="btn btn-sm btn-secondary" data-select-user="${esc(u.address)}">${queued ? 'Selected' : (walletConnected ? 'Use After Disconnect' : 'Use')}</button>` : ''}<button class="btn btn-sm btn-secondary" data-edit-user="${esc(u.address)}">Edit</button><button class="btn btn-sm btn-danger" data-delete-user="${esc(u.address)}">Delete</button></div>`;
       c.appendChild(d);
     });
     c.querySelectorAll('[data-select-wallet-user]').forEach((b) => b.addEventListener('click', () => selectUser(b.getAttribute('data-select-wallet-user'))));

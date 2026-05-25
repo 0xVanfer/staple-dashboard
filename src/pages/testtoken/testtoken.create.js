@@ -179,7 +179,7 @@
     // Check for signer (browser wallet in production)
     const signer = await window.stapleCommon.resolveSigner(userAddr);
     if (!signer) {
-      alert('Please connect a browser wallet for Production mode');
+      alert(await window.stapleCommon.describeMissingSigner(userAddr, { subject: 'User' }));
       return;
     }
 

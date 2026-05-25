@@ -992,7 +992,7 @@
       
       const signer = await window.stapleCommon.resolveSigner(userAddr);
       if (!signer) {
-        alert('Please connect a browser wallet for Production mode');
+        alert(await window.stapleCommon.describeMissingSigner(userAddr, { subject: 'User' }));
         throw new Error('No signer available');
       }
       const erc20 = new ethers.Contract(tokenAddr, erc20MetadataAbi, signer);
@@ -1135,7 +1135,7 @@
     // Check for signer (browser wallet in production)
     const signer = await window.stapleCommon.resolveSigner(userAddr);
     if (!signer) {
-      alert('Please connect a browser wallet for Production mode');
+      alert(await window.stapleCommon.describeMissingSigner(userAddr, { subject: 'User' }));
       setMsg('Missing Wallet Signer', 'red');
       restoreButton();
       return;
