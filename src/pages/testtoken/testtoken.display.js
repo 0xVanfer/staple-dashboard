@@ -8,10 +8,17 @@ try {
   // ===== Basic logging utility =====
   const COMMON = window.stapleCommon;
   let lastTokenRows = [];
+  let testTokenMinterAnalyzerPromise = null;
 
   // ===== Refresh state management (avoid race conditions) =====
   let refreshEpoch = 0; // Increment on each refresh to discard stale renders
   const LOCAL_OVERRIDE_MINT_AMOUNT = '1000000';
+  const TEST_TOKEN_PROXY_STANDARD_SLOTS = [
+    '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc',
+    '0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3',
+    '0xc5f16f0fcc639fa48a6947836d9850f504798523bf8c9a3a87d5876cf622bcf7'
+  ];
+  const TEST_TOKEN_PROXY_BEACON_SLOT = '0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50';
   const setRefreshing = (is) => {
     const btn = document.getElementById('btn-refresh');
     if (btn) btn.disabled = !!is;
@@ -594,14 +601,82 @@ try {
   }
 
   // Event: Batch mint test tokens
+  function toLegalSlot(slot) {
+    const normalized = String(slot || '').startsWith('0x') ? String(slot) : `0x${String(slot || '')}`;
+    return normalized.replace(/^0x0+/, '') ? normalized.replace(/^0x0+/, '0x') : '0x0';
+  }
+
+  async function getTestTokenMinterAnalyzer() {
+    if (!testTokenMinterAnalyzerPromise) {
+      testTokenMinterAnalyzerPromise = import('https://cdn.jsdelivr.net/npm/evmole@0.7.0/dist/evmole.mjs');
+    }
+    return testTokenMinterAnalyzerPromise;
+  }
+
+  async function pullTokenContractLayout(address, provider) {
+    if (typeof provider.getCode !== 'function') {
+      throw new Error('RPC provider cannot read contract bytecode');
+    }
+    const code = await provider.getCode(address);
+    if (!code || code === '0x' || code === '0x0') {
+      throw new Error('Target address is not a contract');
+    }
+    const { contractInfo } = await getTestTokenMinterAnalyzer();
+    return contractInfo(code, { selectors: true, storage: true });
+  }
+
+  async function detectAndPullTokenLayout(address, provider) {
+    const analysisResult = await pullTokenContractLayout(address, provider);
+    if (!analysisResult) return null;
+
+    for (const slot of TEST_TOKEN_PROXY_STANDARD_SLOTS) {
+      const slotValue = await provider.getStorageAt(address, toLegalSlot(slot));
+      if (slotValue && slotValue.length === 66 && !/^0x0+$/.test(slotValue)) {
+        return pullTokenContractLayout(`0x${slotValue.substring(26)}`, provider);
+      }
+    }
+
+    for (const func of analysisResult.functions || []) {
+      if (func.selector !== '5c60da1b') continue;
+      const implementationExtra = await provider.call({ to: address, data: '0x5c60da1b' });
+      if (implementationExtra && implementationExtra.length === 66) {
+        return pullTokenContractLayout(`0x${implementationExtra.substring(26)}`, provider);
+      }
+      throw new Error('Cannot resolve proxy implementation address');
+    }
+
+    const beaconAddress = await provider.getStorageAt(address, TEST_TOKEN_PROXY_BEACON_SLOT);
+    if (beaconAddress && beaconAddress.length === 66 && !/^0x0+$/.test(beaconAddress)) {
+      const implementationExtra = await provider.call({ to: `0x${beaconAddress.substring(26)}`, data: '0x5c60da1b' });
+      if (implementationExtra && implementationExtra.length === 66) {
+        return pullTokenContractLayout(`0x${implementationExtra.substring(26)}`, provider);
+      }
+      throw new Error('Cannot resolve beacon implementation address');
+    }
+
+    return analysisResult;
+  }
+
+  function extractTokenBalanceSlots(pullResult) {
+    const storage = Array.isArray(pullResult?.storage) ? pullResult.storage : [];
+    return storage
+      .filter((item) => String(item?.type || '').startsWith('mapping') && !String(item?.type || '').includes('bool'))
+      .filter((item) => Array.isArray(item?.reads) && Array.isArray(item?.writes))
+      .filter((item) => item.reads.includes('70a08231') && item.writes.includes('23b872dd') && item.writes.includes('a9059cbb'));
+  }
+
+  async function tokenBalanceSlotHash(location, key) {
+    return ethers.utils.keccak256(ethers.utils.solidityPack(['uint256', 'uint256'], [location, key]));
+  }
+
   async function setTokenStorage(provider, addr, slot, value) {
     const paddedValue = ethers.utils.hexZeroPad(value, 32);
     try {
-      await provider.send('hardhat_setStorageAt', [addr, slot, paddedValue]);
+      await provider.send('hardhat_setStorageAt', [addr, toLegalSlot(slot), paddedValue]);
       return true;
     } catch (e) {
       try {
-        await provider.send('anvil_setStorageAt', [addr, slot, paddedValue]);
+        await provider.send('anvil_setStorageAt', [addr, toLegalSlot(slot), paddedValue]);
         return true;
       } catch (e2) {
         return false;
@@ -620,7 +695,40 @@ try {
     return ethers.constants.Zero;
   }
 
-  async function overrideTokenBalance(tokenAddress, userAddress, amount, provider) {
+  async function overrideTokenBalanceViaLayout(tokenAddress, userAddress, amount, provider) {
+    const pullResult = await detectAndPullTokenLayout(tokenAddress, provider);
+    const candidateSlots = extractTokenBalanceSlots(pullResult);
+    if (!candidateSlots.length) {
+      throw new Error('Unable to locate a candidate balance mapping slot');
+    }
+
+    const previousBalance = await readTokenBalance(tokenAddress, userAddress, provider);
+    if (previousBalance.eq(amount)) return true;
+
+    for (const slotInfo of candidateSlots) {
+      const storageSlot = await tokenBalanceSlotHash(ethers.utils.hexZeroPad(userAddress, 32), `0x${slotInfo.slot}`);
+      const originalSlotValue = await provider.getStorageAt(tokenAddress, toLegalSlot(storageSlot));
+      const patchedValue = ethers.BigNumber.from(originalSlotValue).shr(128).shl(128).or(amount);
+
+      const success = await setTokenStorage(provider, tokenAddress, storageSlot, patchedValue.toHexString());
+      if (!success) {
+        throw new Error('Current RPC does not support hardhat/anvil setStorageAt');
+      }
+
+      const newBalance = await readTokenBalance(tokenAddress, userAddress, provider);
+      if (newBalance.eq(amount)) {
+        return true;
+      }
+
+      if (candidateSlots.length > 1) {
+        await setTokenStorage(provider, tokenAddress, storageSlot, originalSlotValue);
+      }
+    }
+
+    throw new Error('Tried every candidate slot but none changed the ERC20 balance');
+  }
+
+  async function overrideTokenBalanceViaProbe(tokenAddress, userAddress, amount, provider) {
     const amountHex = ethers.utils.hexZeroPad(amount.toHexString(), 32);
 
     for (let i = 0; i < 50; i++) {
@@ -640,6 +748,15 @@ try {
     }
 
     throw new Error('Failed to detect token balance storage slot');
+  }
+
+  async function overrideTokenBalance(tokenAddress, userAddress, amount, provider) {
+    try {
+      return await overrideTokenBalanceViaLayout(tokenAddress, userAddress, amount, provider);
+    } catch (layoutError) {
+      console.warn('[testtoken] layout-based balance override failed; falling back to probe', layoutError);
+      return overrideTokenBalanceViaProbe(tokenAddress, userAddress, amount, provider);
+    }
   }
 
   async function mintAllViaLocalOverride(user) {
